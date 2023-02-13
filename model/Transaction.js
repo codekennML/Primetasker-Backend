@@ -1,41 +1,31 @@
-const mongoose =  require('mongoose')
-const User = require('./User')
-const { Schema } = mongoose
+const mongoose = require("mongoose");
+const User = require("./User");
 
-const transactionSchema =  new Schema ({
-    trans_id : {
-        type: String,
-        required : true,
+const { Schema } = mongoose;
+
+const transactionSchema = new Schema({
+  initiator: {
+    type: mongoose.SchemaTypes.ObjectId,
+    ref: User,
+    required: true,
+  },
+
+  trans_type: {
+    type: String,
+    required: true,
+  },
+
+  details: {
+    bank: {
+      type: String,
+      required: true,
     },
+    channel: { type: String, required: true },
+    amount: { type: Number, required: true },
+    card_type: { type: String },
+    account_name: { type: String, required: true },
+    status: { type: String, enum: ["success", "failed"], required: true },
+  },
+});
 
-    creator : {
-        type: mongoose.SchemaTypes.ObjectId,
-        ref : User,
-        required : true
-    },
-
-    receiver : {
-        type: mongoose.SchemaTypes.ObjectId,
-        ref : User,
-        required : true
-    },
-
-    method : {
-        type : String ,
-        required : true,
-        enum : ['debitCard' , 'cashOnDelivery','bankTransfer', 'ussd'],  
-    },
-
-    gateway : {
-        type : String,
-        required : function (){return this.method === 'debitCard'}
-
-    },
-    purpose : {
-        type : String,
-        required : true
-
-    }
-})
-
-module.exports = mongoose.model('Transaction', transactionSchema)
+module.exports = mongoose.model("Transaction", transactionSchema);

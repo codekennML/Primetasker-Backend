@@ -1,4 +1,3 @@
-const { th } = require("date-fns/locale");
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
@@ -39,9 +38,6 @@ const userSchema = new Schema(
 
     acceptedTos: {
       type: Boolean,
-      required: function () {
-        this.googleId ? false : true;
-      },
       default: true,
     },
 
@@ -73,7 +69,6 @@ const userSchema = new Schema(
     phone: {
       type: String,
       max: 15,
-      unique: true,
       trim: true,
     },
 
@@ -87,7 +82,7 @@ const userSchema = new Schema(
     roles: {
       type: [String],
       enum: ["Admin", "Guest", "Customer", "Tasker", "Manager"],
-      default: "Admin",
+      default: "Guest",
     },
 
     bookings: {
@@ -115,11 +110,13 @@ const userSchema = new Schema(
 
     avatar: {
       type: String,
+      default:
+        "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460__340.png",
     },
 
     active: {
       type: Boolean,
-      default: false,
+      default: true,
     },
 
     canProcessTask: {

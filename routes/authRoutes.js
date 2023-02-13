@@ -19,16 +19,15 @@ router.get(
   "/google/callback",
   passport.authenticate("google", {
     session: false,
-    successRedirect: `${process.env.PRIME_COMPANY_URL}/dashboard`,
     failureRedirect: `${process.env.PRIME_COMPANY_URL}/login`,
+    // successRedirect: `${process.env.PRIME_COMPANY_URL}/dashboard`,
   }),
   function (req, res) {
     const currentUser = req.user;
+    const { roles } = currentUser;
 
-    // Create access token
-    // const token = createAccessToken(currentUser);
-
-    const refreshToken = createRefreshToken(currentUser, "1hr");
+    const refreshToken = createRefreshToken(currentUser);
+    console.log(refreshToken);
 
     res.cookie("jwt", refreshToken, {
       httpOnly: true, //accessible only by server
@@ -37,9 +36,11 @@ router.get(
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days cookie expiry
     });
 
-    //  res.json({ token, status: 200 });
-
-    res.redirect(`${process.env.PRIME_COMPANY_URL}/dashboard`);
+    if (roles.includes("Admin")) {
+      res.redirect(`${process.env.PRIME_COMPANY_URL}/admin-dashboard`);
+    } else {
+      res.redirect(`${process.env.PRIME_COMPANY_URL}/dashboard`);
+    }
   }
 );
 

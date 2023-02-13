@@ -1,10 +1,11 @@
 const mongoose = require("mongoose");
 const AutoIncrement = require("mongoose-sequence")(mongoose);
 const { Schema } = mongoose;
+
 const bookingSchema = Schema(
   {
     tasker: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       required: true,
       ref: "User",
     },
@@ -18,6 +19,28 @@ const bookingSchema = Schema(
         },
         message: (props) => `${props.value} must be greater or equal to 3000 `,
       },
+    },
+    category: {
+      type: Schema.Types.ObjectId,
+      ref: "Category",
+      required: true,
+      default: "63bd5cc4b8f2d41cc989756f",
+    },
+
+    commission: {
+      type: Schema.Types.Decimal128,
+      default: function () {
+        return this.booking_price * 0.2;
+      },
+      get: getBill,
+    },
+
+    gatewayFee: {
+      type: mongoose.Schema.Types.Decimal128,
+      default: function () {
+        return this.booking_price * 0.015;
+      },
+      get: getBill,
     },
 
     task_details: {
@@ -45,17 +68,28 @@ const bookingSchema = Schema(
     },
   },
 
+  // { toJSON: { getters: true } },
+
   {
     timestamps: true,
   }
 );
 
-bookingSchema.index({
-  tasker: 1,
-  status: 1,
-  task_details: 1,
-  booking_price: 1,
-});
+function getBill(value) {
+  if (typeof value !== "undefined") {
+    return parseFloat(value.toString());
+  }
+  return value;
+}
+
+bookingSchema.set({ toObject: { getters: true } });
+bookingSchema.set({ toJSON: { getters: true } });
+// bookingSchema.index({
+//   tasker: 1,
+//   status: 1,
+//   task_details: 1,
+//   booking_price: 1,
+// });
 
 bookingSchema.plugin(AutoIncrement, {
   inc_field: "bookingID",

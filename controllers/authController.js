@@ -8,6 +8,7 @@ const bcrypt = require("bcrypt");
 const { sendMail } = require("../middleware/mailer");
 const crypto = require("crypto");
 const ResetToken = require("../model/ResetToken");
+// const { ifError } = require("assert");
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -17,23 +18,32 @@ const ResetToken = require("../model/ResetToken");
 //access public
 
 const signUp = async (req, res) => {
-  const { email, password, acceptedTos } = req.body;
-
-  if (!email || !password || !acceptedTos) {
+  const { email, password, role, canAddUsers } = req.body;
+  //role is the role sent from the frontend
+  if (!email || !password) {
     return res.status(400).json({
       message: "All fields are required",
     });
   }
 
   // Check if the email exists
-  const existingUser = await User.findOne({ email })
+  const emailExists = await User.findOne({ email })
     .collation({ locale: "en", strength: 2 })
     .lean()
     .exec();
 
   // Return an  email taken error response if email exists
-  if (existingUser) {
+  if (emailExists) {
     res.status(409).json({ message: "E-mail already exists" });
+  }
+
+  //Check if the person creating the user is an admin or a new person to be onboarded
+
+  let userRoles;
+  if (role && canAddUsers) {
+    userRoles = role;
+  } else {
+    userRoles = "Guest";
   }
 
   //  Hash the password
@@ -45,8 +55,8 @@ const signUp = async (req, res) => {
 
   const userObject = {
     email,
-    acceptedTos,
     password: hashedPwd,
+    roles: userRoles,
     // mailVerifyCode: verifyCode,
   };
 
@@ -93,7 +103,7 @@ const login = async (req, res) => {
 
   //Check password and compare with database password
   const match = await bcrypt.compare(password, currentUser.password);
-  console.log(match);
+  // console.log(match);
   if (!match) {
     return res.status(401).json({
       message: "Invalid email or Password ",
@@ -127,7 +137,7 @@ const login = async (req, res) => {
 
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
-  console.log(req.body);
+  // console.log(req.body);
 
   if (!email) {
     return res.status(400).json({
@@ -263,7 +273,7 @@ const refresh = async (req, res) => {
   const cookies = req.cookies;
 
   if (!cookies?.jwt) {
-    return res.status(401).json({ message: "unauthorized lol" });
+    return res.status(401).json({ message: "Unauthorized " });
   }
 
   const refreshToken = cookies.jwt;
@@ -316,7 +326,7 @@ const refresh = async (req, res) => {
 const logout = async (req, res) => {
   //Check for cookie in request
   const cookies = req.cookies;
-  console.log(cookies);
+  // console.log(cookies);
   //No cookie, send status of 204
   if (!cookies?.jwt) {
     return res.sendStatus(204); //No content

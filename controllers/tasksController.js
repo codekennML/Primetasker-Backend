@@ -60,21 +60,10 @@ const getAllTasks = async (req, res) => {
     fieldToSort = { [string]: 1 };
   }
 
-  // >>>>>>>>>>>>>>>>>>>Creating the query Object >>>>>>>>>>>>>>>
-
-  // let sortQuery;
-  // sortQuery = Object.assign(taskQuery, fieldToSort);
-  console.log(taskQuery);
-
-  //Push the search and filter field into the aggregate query
-  // query.push({
-  //   $match: { firstname: "Camellia" },
-  // });
-
   // >>>>>>>>>>>>>>>>>>>>>>>>> - Paginating Results-  >>>>>>>>>>>>//
 
   const page = parseInt(req.query?.page) || 1; //Page being requested
-  const pageSize = parseInt(req.query?.limit) || 20; //Number of items per page
+  const pageSize = parseInt(req.query?.limit) || 10; //Number of items per page
   const docsToSkip = (page - 1) * pageSize; //Number of items to skip on page
   const totalResultCount = await Task.countDocuments(query);
   const pages = Math.ceil(totalResultCount / pageSize);

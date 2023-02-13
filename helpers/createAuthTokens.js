@@ -22,7 +22,7 @@ const createAccessToken = (currentUser) => {
 // Create refresh token
 
 const createRefreshToken = (currentUser, expiry) => {
-  const timeBeforeExpires = expiry ? expiry : "7d";
+  const timeBeforeExpires = expiry ? expiry : "1hr";
   const refreshToken = jwt.sign(
     { email: currentUser.email },
 

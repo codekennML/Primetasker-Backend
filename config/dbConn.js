@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
-const { data } = require("./data");
+const { data } = require("./data/bookings");
 
 const connectDB = async () => {
   try {
