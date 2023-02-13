@@ -64,7 +64,7 @@ const getAllBookings = async (req, res) => {
   // >>>>>>>>>>>>>>>>>>>>>>>>> - Paginating Results-  >>>>>>>>>>>>//
 
   const page = parseInt(req.query?.page) || 1; //Page being requested
-  const pageSize = parseInt(req.query?.limit) || 15; //Number of items per page
+  const pageSize = parseInt(req.query?.limit) || 10; //Number of items per page
   const docsToSkip = (page - 1) * pageSize; //Number of items to skip on page
   const totalResultCount = await Booking.countDocuments(query);
   const pages = Math.ceil(totalResultCount / pageSize);
@@ -169,6 +169,30 @@ const getAllBookings = async (req, res) => {
   );
 
   //Lookup query to find the supervising staff for the booking
+  query.push(
+    {
+      $lookup: {
+        from: "categories",
+        localField: "category",
+        foreignField: "_id",
+        let: { category: { $toObjectId: "$assigned_to" } },
+
+        pipeline: [
+          { $match: { $expr: [{ _id: "$$category" }] } },
+
+          {
+            $project: {
+              _id: 0,
+              name: 1,
+            },
+          },
+        ],
+
+        as: "bookingCategory",
+      },
+    },
+    { $unwind: "$bookingCategory" }
+  );
   query.push(
     {
       $lookup: {

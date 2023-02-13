@@ -7,6 +7,7 @@ const getAllUsers = async (req, res) => {
   // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>> - Filtering Results - >>>>>>>>>>>>>>>>>>>//
 
   // let query = [];
+  // console.log(req.query);
 
   const reqQuery = { ...req.query }; //Spread out the request array
 
@@ -19,7 +20,7 @@ const getAllUsers = async (req, res) => {
   const roles = ["Admin", "Manager", "Tasker", "Customer"];
   const gender = ["Male", "Female"];
 
-  console.log(reqQuery.filter);
+  // console.log(reqQuery.filter);
   const filter = reqQuery.filter;
 
   switch (true) {
@@ -51,8 +52,9 @@ const getAllUsers = async (req, res) => {
   let userQuery;
   // console.log(req.query);
 
-  const searchTerm = req.query.search;
-  if (searchTerm !== "undefined" && searchTerm !== "") {
+  const searchTerm = req.query?.search;
+
+  if (req.query.search) {
     const isObjectId = searchTerm.match(/^[0-9a-fA-F]{24}$/); //Check if the query is a user id
 
     if (isObjectId) {
@@ -77,15 +79,15 @@ const getAllUsers = async (req, res) => {
   // console.log(userQuery);
   // query.push(userQuery);
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> --  Sorting Results - >>>>>>>>>>>>>>>>>//
-
+  // console.log(req.query);
   let fieldToSort;
 
   const sortTerm = req.query?.sort;
-  if (sortTerm === "undefined" || sortTerm === "") {
-    fieldToSort = { createdAt: -1 };
-  } else {
+  if (req.query.sort) {
     const string = sortTerm.toLowerCase().replaceAll(" ", "");
     fieldToSort = { [string]: 1 };
+  } else {
+    fieldToSort = { createdAt: -1 };
   }
 
   // >>>>>>>>>>>>>>>>>>>Creating the query Object >>>>>>>>>>>>>>>
@@ -96,7 +98,7 @@ const getAllUsers = async (req, res) => {
   // >>>>>>>>>>>>>>>>>>>>>>>>> - Paginating Results-  >>>>>>>>>>>>//
 
   const page = parseInt(req.query?.page) || 1; //Page being requested
-  const pageSize = parseInt(req.query?.limit) || 20; //Number of items per page
+  const pageSize = parseInt(req.query?.limit) || 10; //Number of items per page
   const docsToSkip = (page - 1) * pageSize; //Number of items to skip on page
   const totalResultCount = await User.countDocuments(query);
   const pages = Math.ceil(totalResultCount / pageSize);

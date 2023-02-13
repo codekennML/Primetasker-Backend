@@ -14,8 +14,9 @@ const connectDB = require("./config/dbConn");
 require("./config/passportGoogle");
 const passport = require("passport");
 const PORT = process.env.PORT || 3500;
-const Booking = require("./model/Booking");
-const { bookings } = require("./config/data");
+// const Message = require("./model/Message");
+// const { messages } = require("./config/data/messages");
+const verifyJWT = require("./middleware/verifyJWT");
 
 //Connect to MongoDB
 connectDB();
@@ -31,9 +32,13 @@ app.use("/", require("./routes/root")); //Link to routing for index page
 app.use(passport.initialize());
 
 app.use("/auth", require("./routes/authRoutes"));
+app.use(verifyJWT);
 app.use("/users", require("./routes/userRoutes"));
+app.use("/chats", require("./routes/chatRoutes"));
+app.use("/messages", require("./routes/messageRoutes"));
 app.use("/tasks", require("./routes/taskRoutes"));
 app.use("/bookings", require("./routes/bookingRoutes"));
+app.use("/stats", require("./routes/statRoutes"));
 
 app.all("*", (req, res) => {
   res.status(404);
@@ -47,6 +52,18 @@ app.all("*", (req, res) => {
     res.type("txt").send("404 Not Found");
   }
 });
+
+// try {
+//   Chat.insertMany(chats);
+// } catch (err) {
+//   console.log(err);
+// }
+
+// try {
+//   Message.insertMany(messages);
+// } catch (err) {
+//   console.log(err);
+// }
 
 app.use(errorHandler);
 mongoose.connection.once("open", async () => {
