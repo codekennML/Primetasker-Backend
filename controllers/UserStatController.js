@@ -33,11 +33,11 @@ const getTopTaskers = async (req, res) => {
     default:
       timeframe = thisWeek;
   }
-  console.log(timeframe);
-  //   let query = [];
-  //   query.push({
-  //     $match: { $gte: { $toDate: timeframe } },
-  //   });
+  // console.log(timeframe);
+  let query = [];
+  query.push({
+    $match: { $gte: timeframe },
+  });
 };
 
 const getTopCustomers = async () => {};

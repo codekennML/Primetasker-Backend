@@ -86,7 +86,7 @@ const signUp = async (req, res) => {
 
 const login = async (req, res) => {
   const { email, password } = req.body;
-
+  console.log(email, password);
   //Check for email and password not supplied
   if (!email || !password) {
     return res.status(400).json({
@@ -121,9 +121,9 @@ const login = async (req, res) => {
     httpOnly: true, //accessible only by server
     secure: true, //https
     sameSite: "None",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days cookie expiry
+    maxAge: 10 * 60 * 1000, // 24hrs  cookie expiry
   });
-
+  console.log(token);
   return res.json({ token, status: 200 });
 };
 
@@ -306,7 +306,7 @@ const refresh = async (req, res) => {
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
-          expiresIn: "7d",
+          expiresIn: "10m",
         }
       );
 

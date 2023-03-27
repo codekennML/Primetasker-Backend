@@ -21,7 +21,7 @@ const getAllChats = async (req, res) => {
     path: "latestMessage.sender",
     select: "firstname lastname avatar",
   });
-  console.log(chat);
+  // console.log(chat);
   if (chat.length > 0) {
     return res.json(chat);
   } else {

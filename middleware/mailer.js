@@ -21,6 +21,5 @@ const sendMail = async (details) => {
     );
   }
 };
-// };
 
 module.exports = { sendMail };

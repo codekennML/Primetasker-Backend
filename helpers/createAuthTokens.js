@@ -13,7 +13,7 @@ const createAccessToken = (currentUser) => {
     },
     process.env.ACCESS_TOKEN_SECRET,
     {
-      expiresIn: "15m",
+      expiresIn: "5m",
     }
   );
   return accessToken;
@@ -22,7 +22,7 @@ const createAccessToken = (currentUser) => {
 // Create refresh token
 
 const createRefreshToken = (currentUser, expiry) => {
-  const timeBeforeExpires = expiry ? expiry : "1hr";
+  const timeBeforeExpires = expiry ? expiry : "20m";
   const refreshToken = jwt.sign(
     { email: currentUser.email },
 
