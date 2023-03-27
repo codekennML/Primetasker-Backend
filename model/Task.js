@@ -27,6 +27,11 @@ const taskSchema = Schema(
       required: true,
     },
 
+    taskTime: {
+      type: String,
+      //set required
+    },
+
     budget: {
       type: Number,
       required: true,
@@ -34,22 +39,43 @@ const taskSchema = Schema(
 
     status: {
       type: String,
-      enum: ["Active", "Inactive"],
-      default: "Active",
+      enum: ["Assigned", "Inactive", "Processing", "Open", "Completed"],
+      default: "Open",
     },
 
-    location: {
+    taskAddress: {
       type: String,
       required: function () {
         return this.taskType === "Physical";
       },
     },
 
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number],
+        required: function () {
+          return this.taskType === "Physical";
+        },
+      },
+    },
+
+    userDeleted: {
+      type: Boolean,
+      default: false,
+    },
+
     // The Files upload will only be visible if the task has been accepted
 
-    files: {
-      type: [String],
-    },
+    files: [
+      {
+        url: String,
+      },
+    ],
 
     taskEarliestDone: {
       type: Date,
@@ -60,17 +86,46 @@ const taskSchema = Schema(
       type: Date,
       required: true,
     },
+
+    offerCount: {
+      type: Number,
+      default: 0,
+    },
+
+    offers: [
+      {
+        type: mongoose.SchemaTypes.ObjectId,
+        ref: "Offer",
+      },
+    ],
+
+    comments: [
+      {
+        type: mongoose.SchemaTypes.ObjectId,
+        ref: "Comment",
+      },
+    ],
+
+    hasMoreComments: {
+      type: Boolean,
+      default: false,
+      required: true,
+    },
+
+    isFlagged: {
+      default: false,
+    },
+
+    flags: [
+      {
+        type: mongoose.SchemaTypes.ObjectId,
+        ref: "Flag",
+      },
+    ],
   },
 
   { timestamps: true }
 );
-taskSchema.index({
-  creator: 1,
-  title: 1,
-  description: 1,
-  status: 1,
-  budget: 1,
-});
 
 taskSchema.plugin(AutoIncrement, {
   inc_field: "task_id",
@@ -78,4 +133,15 @@ taskSchema.plugin(AutoIncrement, {
   start_seq: 1400,
 });
 
-module.exports = mongoose.model("Task", taskSchema);
+const Tasks = mongoose.model("Task", taskSchema);
+
+Tasks.createIndexes({
+  location: "2dsphere",
+  creator: 1,
+  title: 1,
+  description: 1,
+  status: 1,
+  budget: 1,
+});
+
+module.exports = Tasks;

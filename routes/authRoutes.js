@@ -9,7 +9,6 @@ const {
 const loginLimiter = require("../middleware/loginLimiter");
 const verifyJWT = require("../middleware/verifyJWT");
 
-//
 router.get(
   "/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
@@ -20,7 +19,6 @@ router.get(
   passport.authenticate("google", {
     session: false,
     failureRedirect: `${process.env.PRIME_COMPANY_URL}/login`,
-    // successRedirect: `${process.env.PRIME_COMPANY_URL}/dashboard`,
   }),
   function (req, res) {
     const currentUser = req.user;

@@ -54,12 +54,6 @@ const bookingSchema = Schema(
       required: true,
       ref: "User",
     },
-    booking_start: {
-      type: Date,
-    },
-    booking_ends: {
-      type: Date,
-    },
 
     status: {
       type: String,
@@ -82,8 +76,8 @@ function getBill(value) {
   return value;
 }
 
-bookingSchema.set({ toObject: { getters: true } });
-bookingSchema.set({ toJSON: { getters: true } });
+// bookingSchema.set({ toObject: { getters: true } });
+// bookingSchema.set({ toJSON: { getters: true } });
 // bookingSchema.index({
 //   tasker: 1,
 //   status: 1,

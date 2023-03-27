@@ -1,12 +1,11 @@
 const mongoose = require("mongoose");
-const User = require("./User");
 
 const { Schema } = mongoose;
 
 const transactionSchema = new Schema({
   initiator: {
     type: mongoose.SchemaTypes.ObjectId,
-    ref: User,
+    ref: "User",
     required: true,
   },
 

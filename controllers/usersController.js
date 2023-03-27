@@ -149,7 +149,8 @@ const getSingleUser = async (req, res) => {
 };
 
 const updateUser = async (req, res) => {
-  const { email, id, roles } = req.body;
+  const fields = req.body;
+  const { email, id, roles } = fields;
 
   if (!email || !id) {
     return res.status(403).json({
@@ -170,6 +171,12 @@ const updateUser = async (req, res) => {
     });
   }
 
+  Object.keys(fields).map((key) => {
+    if (key in user) {
+      user[key] = fields[key];
+    }
+  });
+
   // If app allows for username chabge , then check for duplicate username
 
   // const duplicateUser = await User.findOne({ username }).collation({ locale : 'en', strength : 2 }).lean().exec()
@@ -181,25 +188,25 @@ const updateUser = async (req, res) => {
   //   user.password =  await bcrypt.hash(password , 10)
   // }
 
-  user.firstname = req.body?.firstname;
-  user.lastname = req.body?.lastname;
-  user.maritalstatus = req.body?.maritalstatus;
-  user.birthDate = req.body?.birthDate;
-  user.phone = req.body?.phone;
-  user.gender = req.body?.gender;
-  user.homeaddress = req.body?.homeaddress;
-  user.roles = req.body?.roles;
-  user.city = req.body?.city;
-  user.stateOfOrigin = req.body?.stateOfOrigin;
-  user.avatar = req.body?.avatar;
-  user.documents = req.body?.documents;
-  user.username = req.body?.username;
-  user.taskContact = req.body?.taskContact;
-  user.minTaskAmt = req.body?.minTaskAmt;
-  user.taskState = req.body?.taskState;
-  user.taskType = req.body?.taskType;
-  user.bankDetails = req.body?.bankDetails;
-  user.cardDetails = req.body?.cardDetails;
+  // user.firstname = req.body?.firstname;
+  // user.lastname = req.body?.lastname;
+  // user.maritalstatus = req.body?.maritalstatus;
+  // user.birthDate = req.body?.birthDate;
+  // user.phone = req.body?.phone;
+  // user.gender = req.body?.gender;
+  // user.homeaddress = req.body?.homeaddress;
+  // user.roles = req.body?.roles;
+  // user.city = req.body?.city;
+  // user.stateOfOrigin = req.body?.stateOfOrigin;
+  // user.avatar = req.body?.avatar;
+  // user.documents = req.body?.documents;
+  // user.username = req.body?.username;
+  // user.taskContact = req.body?.taskContact;
+  // user.minTaskAmt = req.body?.minTaskAmt;
+  // user.taskState = req.body?.taskState;
+  // user.taskType = req.body?.taskType;
+  // user.bankDetails = req.body?.bankDetails;
+  // user.cardDetails = req.body?.cardDetails;
 
   const updatedUser = await user.save();
   // if (updatedUser){
