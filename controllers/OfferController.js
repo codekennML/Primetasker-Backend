@@ -1,35 +1,84 @@
 const { respond } = require("../helpers/response");
 const Offer = require("../model/Offers");
+const Task = require("../model/Task");
 
 const createOffer = async (req, res) => {
-  const { offerId, offerDetails } = req.body;
+  const { offerDetails } = req.body;
+  console.log(offerDetails.offerMessage);
 
-  if (!offerId) {
-    respond(res, 400, "Bad Request. Missing offer Id", null);
+  console.log(offerDetails);
+
+  if (!offerDetails.taskId || !offerDetails.createdBy) {
+    respond(res, 400, "Bad Request. Missing task Id", null, 400);
+  }
+
+  let offerTask = await Task.findOne({ _id: offerDetails.taskId });
+
+  if (!offerTask) {
+    respond(res, 404, "No task found for this offer", null, 404);
   }
 
   const offer = await Offer.create(offerDetails);
+
   if (!offer) {
-    respond(res, 400, "Failed to create offer");
+    respond(res, 409, "Failed to create offer", null, 409);
   }
 
-  let offerDetail = await Detail.findOne({ offerId: offerId });
-  if (!offerDetail) {
-    respond(res, 404, "No offer found for this Offer", null);
+  offerTask.offerCount = offerTask.offerCount + 1;
+  offerTask.offers.push(offer._id);
+
+  if (offerTask.offers.length > 15) {
+    offerTask.hasMoreOffers = true;
   }
 
-  offerDetail.offers.push(offer._id);
+  offerTask.offers
+    .sort((a, b) => b.getTimestamp() - a.getTimestamp())
+    .slice(0, 15);
 
-  offerDetails = await offerDetail.save();
+  const modifiedTask = await offerTask.save();
+  // console.log(modifiedTask);
 
-  respond(res, 201, "offer created success", offer);
+  if (!offer) {
+    respond(res, 409, "Task offer update failed", null, 409);
+  }
+
+  // emitter.emit("offerMade", {
+  //   taskCreator: offerTask.userId,
+  //   taskId: offerTask._id,
+  //   createdBy: offer.createdBy,
+  // });
+
+  // sendOfferMadeMailQueue.add({
+  //   taskCreator: offerTask.userId,
+  //   taskId: offerTask._id,
+  // });
+
+  respond(res, 201, "offer created success", offer, 201);
 };
 
 const editOffer = async (req, res) => {
-  const { id: offerId } = req.body;
+  const { id: offerId, editDetails } = req.body;
   if (!offerId) {
     respond(res, 400, "Bad Request , Missing offer Id");
   }
+  let offerToEdit = await Offer.findById(offerId);
+
+  if (!offerToEdit) {
+    respond(res, 404, "Error : Offer does not exist", null, 404);
+  }
+
+  Object.keys(editDetails).map((key) => {
+    //update the key in the doc or create the key if it doesnt exist within the documebt
+    offerToEdit[key] = editDetails[key];
+  });
+
+  const editedOffer = await Offer.save(offerToEdit);
+
+  if (!editedOffer) {
+    respond(res, 409, "Error: Failed to update Offer", null, 409);
+  }
+
+  respond(res, 200, "Offer Update successfull", editedOffer, 200);
 };
 
 const getAllOffers = async (req, res) => {
@@ -63,21 +112,10 @@ const getAllOffers = async (req, res) => {
   if (searchTerm !== undefined && searchTerm !== "") {
     const isObjectId = searchTerm.match(/^[0-9a-fA-F]{24}$/); //Check if the query is a offer id
     if (isObjectId) {
-      offerQuery = { _id: mongoose.Types.ObjectId(searchTerm) }; //If its object Id, search in id field
-    } else if (!isObjectId) {
-      const queryRegex = new RegExp(searchTerm, "i");
-      (searchString = {
-        $or: [
-          { "creator.firstname": queryRegex },
-          { "creator.lastname": queryRegex },
-          { budget: queryRegex },
-          { title: queryRegex },
-        ],
-      }),
-        (offerQuery = searchString);
+      offerQuery = { _id: mongoose.Types.ObjectId(searchTerm) };
+    } else {
+      offerQuery = {};
     }
-  } else {
-    offerQuery = {};
   }
 
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> --  Sorting Results - >>>>>>>>>>>>>>>>>//
@@ -115,9 +153,9 @@ const getAllOffers = async (req, res) => {
       //Lookup query to find the creator of each offer based on the creator ref to the User table
       $lookup: {
         from: "users",
-        localField: "creator",
+        localField: "createdBy",
         foreignField: "_id",
-        let: { searchId: { $toObjectId: "$creator" } }, //creator id was stored as string, need to convert to object id
+        let: { searchId: { $toObjectId: "$createdBy" } }, //creator id was stored as string, need to convert to object id
 
         pipeline: [
           { $match: { $expr: [{ _id: "$$searchId" }] } },
@@ -212,6 +250,45 @@ const getSpecificOffer = async (req, res) => {
     .json({ data: offer, message: "Offers fetched successfully" });
 };
 
+const getTaskOffers = async (req, res) => {
+  const { taskId, page } = req.query;
+
+  console.log(taskId, page);
+
+  console.log(req.query);
+
+  if (!taskId) {
+    respond(res, 400, "Bad Request, missing task id", null, 400);
+  }
+
+  //Fetching second page as we have already sent first page to the frontend with the tasks
+  const currPage = parseInt(page) || 1;
+  const pageSize = 10;
+  const docsToskip = (currPage - 1) * pageSize;
+
+  const offers = await Offer.find({ taskId })
+    .populate({ path: "createdBy", select: "Avatar firstname lastname " })
+    .sort({ createdAt: -1 })
+    .skip(docsToskip)
+    .limit(10);
+
+  if (!offers) {
+    respond(res, 404, "Error : No  offers for this task", null, 404);
+  }
+
+  const pages = Math.ceil(offers.length / pageSize);
+
+  const result = {
+    offers: offers,
+    meta: {
+      page: page,
+      pages: pages,
+    },
+  };
+
+  respond(res, 200, "comment fetched success", result, 200);
+};
+
 const updateOffer = async (req, res) => {
   const { offerId, fields } = req.body;
 
@@ -262,6 +339,7 @@ const deleteOffer = async (req, res) => {
 
 module.exports = {
   createOffer,
+  getTaskOffers,
   getAllOffers,
   getSpecificOffer,
   updateOffer,

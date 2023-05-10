@@ -31,9 +31,23 @@ const userSchema = new Schema(
       type: String,
       max: 50,
     },
+
     homeaddress: {
-      type: String,
-      max: 300,
+      suite: {
+        type: String,
+        required: true,
+      },
+
+      location: {
+        type: {
+          type: String,
+          enum: ["Point"],
+        },
+        coordinates: {
+          type: [Number],
+          default: undefined,
+        },
+      },
     },
 
     acceptedTos: {
@@ -41,15 +55,69 @@ const userSchema = new Schema(
       default: true,
     },
 
+    bio: {
+      type: String,
+      required: false,
+    },
+
+    interestType: {
+      //1 : Tasker, //2:Customer //3:Both
+      type: Number,
+      default: 3,
+    },
+
     city: {
       type: String,
       max: 255,
     },
 
-    stateOfOrigin: {
-      type: String,
-      max: 50,
+    portfolio: {
+      resume: {
+        type: String,
+        required: false,
+      },
+
+      skills: [
+        {
+          title: {
+            type: String,
+            required: true,
+          },
+
+          badge: {
+            type: String,
+            required: false,
+          },
+          experience: {
+            type: Number,
+            required: true,
+          },
+        },
+      ],
     },
+
+    showcase: {
+      hasMore: {
+        type: Boolean,
+        default: false,
+      },
+
+      canAddMore: {
+        type: Boolean,
+        default: true,
+      },
+
+      items: [
+        {
+          url: {
+            type: String,
+            required: true,
+          },
+        },
+      ],
+    },
+
+    // Add City Coordinates:
 
     lastname: {
       type: String,
@@ -85,39 +153,32 @@ const userSchema = new Schema(
       default: "Guest",
     },
 
-    bookings: {
-      type: [mongoose.SchemaTypes.ObjectId],
-      ref: "Booking",
-    },
-
-    transactions: {
-      type: [mongoose.SchemaTypes.ObjectId],
-      ref: "Transaction",
-    },
-
-    tasks: {
-      type: [mongoose.SchemaTypes.ObjectId],
-      ref: "Task",
-    },
-
     verified: { type: Boolean, default: false },
 
-    documents: [
-      {
-        type: String,
-      },
-    ],
+    userIdimage: { type: String },
 
-    avatar: {
+    userUtilityBill: { type: String },
+
+    Avatar: {
       type: String,
-      default:
-        "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460__340.png",
     },
 
     active: {
       type: Boolean,
       default: true,
     },
+
+    isFlagged: {
+      type: Boolean,
+      default: false,
+    },
+
+    flags: [
+      {
+        type: mongoose.SchemaTypes.ObjectId,
+        ref: "Flag",
+      },
+    ],
 
     canProcessTask: {
       type: Boolean,
@@ -136,6 +197,7 @@ const userSchema = new Schema(
       type: String,
       max: 11,
     },
+
     taskMinAmount: {
       type: Number,
     },
@@ -159,46 +221,107 @@ const userSchema = new Schema(
       },
     },
 
-    bankDetails: [
-      {
-        accountName: {
-          type: String,
-          immutable: true,
-          required: function () {
-            return this.canProcessTask;
-          },
+    bankDetails: {
+      accountName: {
+        type: String,
+        immutable: true,
+        required: function () {
+          return this.canProcessTask;
         },
-        accountNumber: {
-          type: String,
-          immutable: true,
-          required: function () {
-            return this.canProcessTask;
-          },
+      },
+      accountNumber: {
+        type: String,
+        immutable: true,
+        required: function () {
+          return this.canProcessTask;
         },
+      },
 
-        bankName: {
-          type: String,
-          immutable: true,
-          required: function () {
-            return this.canProcessTask;
-          },
+      bankName: {
+        type: String,
+        immutable: true,
+        required: function () {
+          return this.canProcessTask;
         },
+      },
+    },
+
+    // cardDetails: [
+    //   {
+    //     cardName: {
+    //       type: String,
+    //     },
+    //     cardNumber: {
+    //       type: Number,
+    //     },
+    //     cardExpiry: {
+    //       type: String,
+    //     },
+    //   },
+    // ],
+
+    alerts: [
+      {
+        text: String,
+        location: String,
+        taskType: String,
       },
     ],
 
-    cardDetails: [
-      {
-        cardName: {
-          type: String,
-        },
-        cardNumber: {
-          type: Number,
-        },
-        cardExpiry: {
-          type: String,
-        },
+    notifications: {
+      //1 - Email , 2-SMS, 3-Push
+      transactions: {
+        type: [Number],
+        enum: [1, 2, 3],
+        default: [1],
       },
-    ],
+
+      taskUpdates: {
+        type: [Number],
+        enum: [1, 2, 3],
+        default: [1, 2, 3],
+      },
+      taskReminders: {
+        type: [Number],
+        enum: [1, 2, 3],
+        default: [1, 2, 3],
+      },
+      taskRecommendations: {
+        type: [Number],
+        enum: [1, 2, 3],
+        default: [1, 3],
+      },
+      matchingAlerts: {
+        type: [Number],
+        enum: [2, 3],
+        default: [3],
+      },
+      taskHelpInfo: {
+        type: [Number],
+        enum: [1, 3],
+        default: [1, 3],
+      },
+      newsLetter: {
+        type: [Number],
+        enum: [1, 3],
+        default: [1],
+      },
+    },
+
+    verification: {
+      addressVerified: { type: Boolean, default: false },
+
+      idVerified: { type: Boolean, default: false },
+
+      avatarAdded: { type: Boolean, default: false },
+
+      mobileVerified: { type: Boolean, default: false },
+
+      ageVerified: { type: Boolean, default: false },
+
+      bankVerified: { type: Boolean, default: false },
+    },
+
     // refreshToken : String
   },
 
@@ -207,5 +330,5 @@ const userSchema = new Schema(
   }
 );
 
-userSchema.index({ username: 1, email: 1, firstname: 1, lastname: 1 });
+// userSchema.index({ username: 1, email: 1, firstname: 1, lastname: 1 });
 module.exports = mongoose.model("User", userSchema);

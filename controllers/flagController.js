@@ -7,12 +7,14 @@ const createFlag = async (req, res) => {
   const flagFields = req.body;
 
   // const {type , createdBy, reason  } = flagFields
+  console.log(flagFields);
 
-  if (flagFields.type || !flagFields.createdBy || !flagFields.reason) {
+  if (!flagFields.type || !flagFields.createdBy || !flagFields.reason) {
     respond(res, 400, "Error : Bad request - Incomplete flag data", null, 400);
   }
 
   const flag = await Flag.create(flagFields);
+  console.log(flag);
 
   if (!flag) {
     respond(res, 409, "Error : Failed to create Flag", null, 409);
@@ -27,9 +29,10 @@ const createFlag = async (req, res) => {
     }
     user.isFlagged = true;
     user.flags.push(flag._id);
-    if (user.flags > 7) {
+    if (user.flags.length > 3) {
       user.active = false;
     }
+
     const savedUserFlag = await user.save();
     if (!savedUserFlag) {
       respond(res, 409, "Error : Failed to flag user", null, 409);
@@ -42,14 +45,15 @@ const createFlag = async (req, res) => {
     }
     task.isFlagged = true;
     task.flags.push(flag._id);
-    if (task.flags > 3) {
+    if (task.flags.length > 3) {
       task.status = "Inactive";
     }
     const savedTaskFlag = await task.save();
+
     if (!savedTaskFlag) {
       respond(res, 409, "Error : Failed to flag task", null, 409);
     }
-    response = savedtaskFlag;
+    response = savedTaskFlag;
   } else {
     var comment = await Comment.findById(flagFields.comment);
     if (!comment) {
@@ -57,7 +61,7 @@ const createFlag = async (req, res) => {
     }
     comment.isFlagged = true;
     comment.flags.push(flag._id);
-    if (comment.flags > 3) {
+    if (comment.flags.length > 3) {
       comment.active = false;
     }
     const savedCommentFlag = await comment.save();

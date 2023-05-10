@@ -8,15 +8,6 @@ const detailSchema = Schema({
     required: true,
     ref: "Task",
   },
-
-  offers: {
-    type: [mongoose.Schema.Types.ObjectId],
-    ref: "Offer",
-  },
-  comments: {
-    type: [mongoose.Schema.Types.ObjectId],
-    ref: "Comment",
-  },
 });
 
 module.exports = mongoose.model("Detail", detailSchema);

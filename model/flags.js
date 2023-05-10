@@ -12,7 +12,9 @@ const flagSchema = Schema(
     violation: {
       type: String,
       required: true,
-      enum: ["spam", "offensive", "discriminate", "hate", "porn", "breach"],
+      enum: [1, 2, 3, 4, 5],
+
+      // enum representation : ["spam", "offensive", "discrimination", "hate", "porn", "breach"],
     },
     //user being reported
     user: {

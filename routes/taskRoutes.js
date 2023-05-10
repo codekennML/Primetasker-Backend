@@ -6,10 +6,9 @@ const verifyJWT = require("../middleware/verifyJWT");
 router
   .route("/")
   .get(tasksController.getAllTasks)
-  // router.use(verifyJWT);
-  .patch(tasksController.updateTask)
-  .delete(tasksController.deleteTask)
-  .post(verifyJWT, tasksController.createTask);
+  .patch(verifyJWT, tasksController.updateTask)
+  .delete(verifyJWT, tasksController.deleteTask)
+  .post(tasksController.createTask);
 
 router.route("/:id").get(tasksController.getSpecificTask);
 router.route("/user").get(tasksController.getUserTask);

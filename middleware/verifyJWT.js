@@ -13,10 +13,10 @@ const verifyJWT = (req, res, next) => {
   const token = authHeader.split(" ")[1];
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-    if (err) respond(res, 403, "403 Forbidden. JWT mismatch", null);
+    if (err) respond(res, 401, "401 Unathorized", null);
     req.user = decoded.UserInfo.userId;
     req.roles = decoded.UserInfo.roles;
-    console.log(req.user);
+
     next();
   });
 };

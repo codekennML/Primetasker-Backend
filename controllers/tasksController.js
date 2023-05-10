@@ -3,76 +3,188 @@ const mongoose = require("mongoose");
 const Detail = require("../model/taskExtras");
 const User = require("../model/User");
 const { respond } = require("../helpers/response");
-const { getAblyClient } = require("../config/Ably");
+// const { getAblyClient } = require("../config/Ably");
+const keywordMatchQueue = require("../Queues/taskAlertsQueue,js");
+const emitter = require("../helpers/Emitter");
+const language = require("@google-cloud/language");
+
+const path = require("path");
+const Alert = require("../model/Alerts");
+const stringSimilarity = require("string-similarity");
+
+const client = new language.LanguageServiceClient();
+const keyPath = path.join(__dirname, "..", "config", "primetasker.json");
+
+// Set the environment variable for the JSON file path
+process.env.GOOGLE_APPLICATION_CREDENTIALS = keyPath;
+// });
+
+const { tokenizeStemLemma } = require("../helpers/tokeniseStem");
 
 const createTask = async (req, res) => {
   const { fields } = req.body;
 
   const user = req.user;
 
-  console.log(fields.creator, user);
-  const { details, location, taskType, ...others } = fields;
+  // if (!user || user !== fields.creator) {
+  //   respond(res, 403, "Forbidden. User does not match", null, 403);
+  // }
 
-  const newFields = {
-    description: details,
-    taskAddress: location?.place,
-    location: {
-      type: "Point",
-      coordinates: [location?.lng, location?.lat],
-    },
-    ...others,
-  };
+  // console.log(fields);
+  const { details, Avatar, location, ...others } = fields;
 
-  if (!user || user !== fields.creator) {
-    respond(res, 403, "Forbidden. User does not match", null, 403);
+  let newFields;
+
+  if (fields.taskType === "Remote") {
+    newFields = {
+      description: details,
+      ...others,
+    };
+  } else {
+    newFields = {
+      description: details,
+      taskAddress: location?.place,
+      location: {
+        type: "Point",
+        coordinates: [location?.lng, location?.lat],
+      },
+      ...others,
+    };
   }
-  console.log(newFields);
 
-  const createdTask = await Task.create(newFields);
+  let createdTask = await Task.create(newFields);
 
   if (!createdTask) {
     respond(res, 400, "Failed to create task", null, 400);
   }
-  //initialize the server sent event fot notifying users of new tasks availability
-  const ablyClient = await getAblyClient();
+  // Insert the task creators avatar and id for rendering  into the created task for rendering within the inifinte scroll comp since our sse would not have populated these as we are sending as sse plus we dont want to make another db call
 
-  const channel = ablyClient.channels.get("tasks");
-  if (channel) {
-    channel.publish("new_message", "messageAdded");
+  createdTask = createdTask.toJSON();
+  createdTask.id = createdTask._id;
+  createdTask.creator_details = {
+    Avatar: Avatar,
+  };
+
+  emitter.emit("new-task", newFields);
+
+  const text = `${newFields.title} ${newFields.description}`;
+  let entitiesToCompare;
+
+  try {
+    const document = {
+      content: text,
+      type: "PLAIN_TEXT",
+    };
+
+    const [result] = await client.analyzeEntities({ document });
+
+    const entities = result?.entities;
+
+    const allEntities =
+      entities?.length > 0
+        ? entities.reduce((acc, entity) => {
+            const result = tokenizeStemLemma(entity);
+            return acc.concat(result);
+          }, [])
+        : [];
+
+    entitiesToCompare = Array.from(new Set(allEntities));
+  } catch (err) {
+    console.log(err);
   }
+
+  // const regexString = entitiesToCompare.map((term) => `(${term})`).join("|");
+
+  //Perform string similarity test using the description text and the alerts texts and if the score > 27%. return the alert
+
+  const AlertsWithMatchingStems = await Alert.find({
+    // stemmedTextArray: { $regex: regexString },
+    stemmedTextArray: { $in: entitiesToCompare },
+    categoryId: { $eq: createdTask.categoryId },
+  });
+
+  // console.log(AlertsWithMatchingStems);
+
+  const highlySimilarAlerts = (entries) => {
+    const tokenizedText = tokenizeStemLemma(text).toString();
+
+    entries.forEach((entry) => {
+      const tokenizedEntry = tokenizeStemLemma(entry.text).toString();
+
+      const similarityScore = stringSimilarity.compareTwoStrings(
+        tokenizedText,
+        tokenizedEntry
+      );
+      // const similarityScore = nlp.similarity.cosine(text, entry.text);
+      console.log(similarityScore, entry._id);
+
+      if (similarityScore && similarityScore > 0.27 && entry) {
+        // usersToAlert.push(entry);
+
+        emitter.emit("notify", {
+          type: "AlertMatch",
+          userId: entity.userId,
+          content: createdTask._id, //We will use the content to hold the taskID that is matched so we can provide a link to the task in the frontend
+        });
+
+        sendAlertMatchMailTaskQueue.add({
+          userId: entity.userId,
+          taskId: createdTask._id,
+        });
+
+        //Add Push Notification
+        // sendPushNotification()
+      }
+    });
+  };
+
+  //Execute the function to compare similarities & sendMail, Notificaton and push notification
+  highlySimilarAlerts(AlertsWithMatchingStems);
+
+  // usersToAlert?.length > 0 ? sendAlertMatchTaskQueue.add({
+  //   userId :
+  // }) : null;
+
+  // console.log(entitiesToCompare);
+
+  //KEEP THIS CODE FOR WHEN THE SSE ENDPOINT NEEDS TO SCALE ,
+  //AUTOMATICALLY SWITCH TO ABLY FOR TASKS ALERTING BY COMMENTING OUT THE CODE
+
+  // initialize the server sent event fot notifying users of new tasks availability
+  // const ablyClient = await getAblyClient();
+
+  // const channel = ablyClient.channels.get("tasks");
+  // if (channel) {
+  //   channel.publish("new_message", JSON.stringify(createdTask));
+  // }
+
+  // sse.send(createdTask, "message")
   // await ablyClient.close();
 
   respond(res, 201, "task created success", createdTask, 201);
 };
 
 const getAllTasks = async (req, res) => {
+  // console.log(req.query, req.params);
+  const queryObject = JSON.parse(req.query.filterParams);
   // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>> - Filtering Results - >>>>>>>>>>>>>>>>>>>//
 
   //Create a query array that we will push further conditions to, based on the received url params
   let query = [];
 
-  const reqQuery = { ...req.query }; //Spread out the request params array
+  const reqQuery = { ...queryObject }; //Spread out the request params array
 
   const excludeParams = ["sort", "page", "search"]; //fields to remove from the list to be filtered
 
   excludeParams.forEach((params) => delete reqQuery[params]); //exclude unwanted fields
 
-  // let filterOption;
-
-  // const filter = reqQuery.filter;
-
-  // switch (true) {
-  //   default:
-  //     filterOption = {};
-  // }
-
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> - Searching Results - >>>>>>>>>>>>>>>>>>>>>//
 
-  console.log(req.query);
+  console.log(JSON.parse(req.query.filterParams));
 
   let searchQuery;
 
-  const searchTerm = req.query?.search;
+  const searchTerm = queryObject?.search;
 
   if (searchTerm !== undefined && searchTerm !== "") {
     const isObjectId = searchTerm.match(/^[0-9a-fA-F]{24}$/); //Check if the query is a task id
@@ -93,56 +205,55 @@ const getAllTasks = async (req, res) => {
   //task Type Filter
   let taskTypeFilter;
 
-  const taskType = req.query?.taskType;
+  const taskType = queryObject?.taskType;
 
-  if (taskType && taskType !== "All") {
-    taskTypeFilter = { taskType: taskType };
+  if (taskType && (taskType === "Remote" || taskType === "Physical")) {
+    taskTypeFilter = {
+      taskType: {
+        $eq: taskType,
+      },
+    };
   }
 
   //category filter
 
   let categoryFilter;
 
-  let categoryToFilter = req.query?.categories;
+  let categoryToFilter = queryObject?.categories;
 
-  if (
-    categoryToFilter &&
-    (categoryToFilter !== undefined || categoryToFilter !== "")
-  ) {
-    categoryToFilter = categoryToFilter.split(",");
-    categoryFilter = { category: { $in: categoryToFilter } };
+  if (categoryToFilter?.length > 0) {
+    categoryFilter = { categoryId: { $in: categoryToFilter } };
   }
-  console.log(categoryFilter);
+  // console.log(categoryFilter);
 
   //budget price range filter
   let priceRangeFilter;
-  let priceRange = req.query?.range;
+  let priceRange = queryObject?.range;
 
   let minPrice;
   let maxPrice;
   if (priceRange) {
     //price range is a string of form "a, b"
-    priceRange = priceRange.split(",");
+
     minPrice = parseInt(priceRange[0]) || 5000;
     maxPrice = parseInt(priceRange[1]) || 1000000;
     priceRangeFilter = { budget: { $gte: minPrice, $lte: maxPrice } };
   }
 
-  console.log(priceRangeFilter);
   //offer Filter
 
   let offerFilter;
-  const offersToFilter = req.query.zeroOffers;
-  console.log(offersToFilter);
+  const offersToFilter = queryObject.zeroOffers;
+  // console.log(offersToFilter);
 
   if (offersToFilter && offersToFilter === "true") {
     //fetch only tasks with no offers
-    offerFilter = { offers: null };
+    offerFilter = { offerCount: { $eq: 0 } };
   }
 
   let statusFilter;
 
-  const statusToFilter = req.query.assigned;
+  const statusToFilter = queryObject.assigned;
 
   if (statusToFilter && statusToFilter === "true") {
     //fetch only unassigned  tasks
@@ -155,8 +266,9 @@ const getAllTasks = async (req, res) => {
   //location && gps cordinates filter  regex filter
 
   let locationFilter;
-  let location = req.query?.location;
-  let distanceToSearch = req.query?.maxDistance;
+  let location = queryObject?.location;
+  // console.log(location);
+  let distanceToSearch = queryObject?.maxDistance;
   let geoNearFilter;
 
   if (
@@ -165,6 +277,7 @@ const getAllTasks = async (req, res) => {
     (location.place !== undefined || location.place !== "")
   ) {
     location = JSON.parse(location);
+    // console.log(location);
 
     //transform location into gps and location
 
@@ -175,32 +288,34 @@ const getAllTasks = async (req, res) => {
     let distance;
 
     if (distanceToSearch.length > 1) {
-      distanceToSearch = distanceToSearch.split(",");
-      distance = Number(distanceToSearch[1]) * 1000;
+      distance = parseInt(distanceToSearch[1]) * 1000;
     }
+
+    //set location to place
 
     const placeRegex = new RegExp(place, "i");
 
     locationFilter = {
-      location: placeRegex,
+      taskAddress: placeRegex,
     };
-
-    geoNearFilter = {
-      $geoNear: {
-        near: {
-          type: "Point",
-          coordinates: [3.5851718, 6.4698419],
+    if (lng && lat) {
+      geoNearFilter = {
+        $geoNear: {
+          near: {
+            type: "Point",
+            coordinates: [Number(lng), Number(lat)],
+          },
+          distanceField: "distance",
+          spherical: true,
+          maxDistance: distance || 1000,
         },
-        maxDistance: distance || 1000,
-        distanceField: "distance",
-        spherical: true,
-      },
-    };
+      };
+    }
   }
 
-  if (geoNearFilter) {
-    query.push(geoNearFilter);
-  }
+  // if (geoNearFilter) {
+  //   query.push(geoNearFilter);
+  // }
 
   const matchQuery = Object.assign(
     { userDeleted: false },
@@ -209,7 +324,7 @@ const getAllTasks = async (req, res) => {
     categoryFilter,
     priceRangeFilter,
     statusFilter,
-    locationFilter,
+    // locationFilter,
     taskTypeFilter
   );
 
@@ -217,7 +332,7 @@ const getAllTasks = async (req, res) => {
 
   let fieldToSort;
 
-  const taskSortField = req.query?.sort;
+  const taskSortField = queryObject?.sort;
   // console.log(taskSortField);
   if (taskSortField === undefined || taskSortField === "") {
     fieldToSort = { createdAt: -1 };
@@ -225,14 +340,6 @@ const getAllTasks = async (req, res) => {
     const sortString = taskSortField.split(":");
     fieldToSort = { [sortString[0]]: Number(sortString[1]) };
   }
-
-  // >>>>>>>>>>>>>>>>>>>>>>>>> - Paginating Results-  >>>>>>>>>>>>//
-
-  const page = parseInt(req.query?.page) || 1; //Page being requested
-  const pageSize = parseInt(req.query?.limit) || 10; //Number of items per page
-  const docsToSkip = (page - 1) * pageSize; //Number of items to skip on page
-  const totalResultCount = await Task.countDocuments(query);
-  const pages = Math.ceil(totalResultCount / pageSize);
 
   // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Populate Query Array >>>>>>>>>>>>>>>>>>>>>>>.
 
@@ -245,9 +352,21 @@ const getAllTasks = async (req, res) => {
   // , isFlagged: false
   //Match stage
 
-  query.push({
-    $match: matchQuery,
-  });
+  // query.push({
+  //   $match: matchQuery,
+  // });
+  // query.push ({
+  //   count : "total"
+  // })
+
+  // >>>>>>>>>>>>>>>>>>>>>>>>> - Paginating Results-  >>>>>>>>>>>>//
+
+  const page = parseInt(queryObject?.page) || 1; //Page being requested
+  const pageSize = parseInt(queryObject?.limit) || 10; //Number of items per page
+  const docsToSkip = (page - 1) * pageSize; //Number of items to skip on page
+
+  // >>>>>>>>>>>>>>>>>> Returning Response  >>>>>>>>>>>>>>>>>>>>//
+
   //Lookup Stage for users
   query.push(
     {
@@ -354,12 +473,15 @@ const getAllTasks = async (req, res) => {
         title: 1,
         "creator_details.Avatar": 1,
         budget: 1,
-        location: 1,
+        taskAddress: 1,
         taskType: 1,
         status: 1,
         taskTime: 1,
         taskEarliestDone: 1,
+        taskDeadline: 1,
         offerCount: 1,
+        createdAt: 1,
+        // total: 1,
       },
     }
   );
@@ -372,22 +494,54 @@ const getAllTasks = async (req, res) => {
     $limit: pageSize,
   });
 
-  console.log(query);
+  console.log(matchQuery);
 
-  // >>>>>>>>>>>>>>>>>> Returning Response  >>>>>>>>>>>>>>>>>>>>//
-
-  const tasks = await Task.aggregate(query);
-
-  const result = {
-    tasks: tasks,
-    meta: {
-      page: page,
-      pages: pages,
-      totalDocs: totalResultCount,
+  const result = await Task.aggregate([
+    { $match: matchQuery }, //Match stage inside query object
+    {
+      $facet: {
+        count: [{ $count: "total" }],
+        matchedDocuments: query,
+      },
     },
-  };
-  // return res.status(200).json(tasks);
-  respond(res, 200, "tasks fetched success", result, 200);
+
+    {
+      $unwind: "$count",
+    },
+    {
+      $project: {
+        _id: 0,
+        count: "$count.total",
+        data: "$matchedDocuments",
+      },
+    },
+  ]);
+
+  let tasks;
+  console.log(result.length);
+
+  if (result.length === 0) {
+    tasks = {
+      tasks: [],
+      meta: {
+        count: 0,
+        page: 0,
+        pages: 0,
+      },
+    };
+  } else {
+    tasks = {
+      tasks: result[0].data,
+      meta: {
+        count: result[0]?.count,
+        page: page,
+        pages: Math.ceil(result[0].count / pageSize),
+      },
+    };
+  }
+  console.log(tasks);
+
+  respond(res, 200, "tasks fetched success", tasks, 200);
 };
 
 const getUserTask = async (req, res) => {
@@ -412,7 +566,7 @@ const getSpecificTask = async (req, res) => {
     respond(res, 400, "Bad Request, Please try again");
     return res.status(400).json({ message: "Bad Request. Please try again" });
   }
-  console.log(taskId);
+  // console.log(taskId);
   //Set tasks to Details :: TODO
 
   var task = await Task.findById(taskId).populate([
@@ -428,6 +582,17 @@ const getSpecificTask = async (req, res) => {
       path: "creator",
       model: User,
       select: "Avatar lastname firstname",
+    },
+    {
+      path: "offers",
+      populate: {
+        path: "createdBy",
+        model: User,
+        select: "Avatar lastname firstname",
+      },
+      options: {
+        sort: { createdAt: -1 }, // Sort offers by createdAt in descending order
+      },
     },
   ]);
 

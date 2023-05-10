@@ -18,7 +18,7 @@ const offerSchema = Schema(
     },
 
     offerAmount: {
-      type: mongoose.SchemaTypes.Decimal128,
+      type: Number,
       required: true,
     },
 

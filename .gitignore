@@ -1,3 +1,4 @@
 node_modules
 logs
 .env
+google-api-credentials.json

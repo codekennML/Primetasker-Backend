@@ -11,8 +11,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/language": "^5.2.2",
     "ably": "^1.2.37",
+    "axios": "^1.4.0",
     "bcrypt": "^5.1.0",
+    "body-parser": "^1.20.2",
+    "bull": "^4.10.4",
+    "compromise": "^14.8.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "date-fns": "^2.29.3",
@@ -24,11 +29,18 @@
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^6.7.5",
     "mongoose-sequence": "^5.3.1",
+    "natural": "^6.2.0",
     "passport": "^0.6.0",
     "passport-google-oauth20": "^2.0.0",
     "postmark": "^3.0.15",
+    "query-string": "^8.1.0",
+    "request-ip": "^3.3.0",
     "socket.io": "^4.6.0",
-    "uuid": "^9.0.0"
+    "string-similarity": "^4.0.4",
+    "ua-parser-js": "^1.0.35",
+    "uuid": "^9.0.0",
+    "wink-eng-lite-web-model": "^1.5.0",
+    "wink-nlp": "^1.13.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.20"

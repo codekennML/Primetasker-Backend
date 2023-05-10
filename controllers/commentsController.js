@@ -36,7 +36,7 @@ const createComment = async (req, res) => {
   }
 
   commentTask.comments
-    .sort((a, b) => b.getTimestamp - a.getTimestamp())
+    .sort((a, b) => a.getTimestamp - b.getTimestamp())
     .slice(0, 30);
 
   const modifiedTask = await commentTask.save();

@@ -16,6 +16,11 @@ const taskSchema = Schema(
       required: true,
     },
 
+    categoryId: {
+      type: Number,
+      required: true,
+    },
+
     description: {
       type: String,
       required: true,
@@ -54,13 +59,14 @@ const taskSchema = Schema(
       type: {
         type: String,
         enum: ["Point"],
-        default: "Point",
       },
       coordinates: {
         type: [Number],
-        required: function () {
-          return this.taskType === "Physical";
-        },
+        default: undefined,
+      },
+
+      placeId: {
+        type: String,
       },
     },
 
@@ -77,14 +83,16 @@ const taskSchema = Schema(
       },
     ],
 
-    taskEarliestDone: {
-      type: Date,
-      required: true,
-    },
-
     taskDeadline: {
       type: Date,
-      required: true,
+      required: false,
+    },
+
+    taskEarliestDone: {
+      type: Date,
+      required: function () {
+        return this.taskDeadline ? false : true;
+      },
     },
 
     offerCount: {
@@ -98,6 +106,10 @@ const taskSchema = Schema(
         ref: "Offer",
       },
     ],
+    hasMoreOffers: {
+      type: Boolean,
+      default: false,
+    },
 
     comments: [
       {
@@ -109,10 +121,10 @@ const taskSchema = Schema(
     hasMoreComments: {
       type: Boolean,
       default: false,
-      required: true,
     },
 
     isFlagged: {
+      type: Boolean,
       default: false,
     },
 
@@ -135,13 +147,15 @@ taskSchema.plugin(AutoIncrement, {
 
 const Tasks = mongoose.model("Task", taskSchema);
 
-Tasks.createIndexes({
-  location: "2dsphere",
-  creator: 1,
-  title: 1,
-  description: 1,
-  status: 1,
-  budget: 1,
-});
+// taskSchema.index({
+//   location: "2dsphere",
+//   creator: 1,
+//   title: 1,
+//   description: 1,
+//   status: 1,
+//   budget: 1,
+// });
+
+// Tasks.createIndexes();
 
 module.exports = Tasks;
