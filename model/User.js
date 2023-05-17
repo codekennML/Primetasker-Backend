@@ -66,11 +66,6 @@ const userSchema = new Schema(
       default: 3,
     },
 
-    city: {
-      type: String,
-      max: 255,
-    },
-
     portfolio: {
       resume: {
         type: String,
@@ -117,8 +112,6 @@ const userSchema = new Schema(
       ],
     },
 
-    // Add City Coordinates:
-
     lastname: {
       type: String,
       max: 50,
@@ -147,6 +140,7 @@ const userSchema = new Schema(
       required: true,
       trim: true,
     },
+
     roles: {
       type: [String],
       enum: ["Admin", "Guest", "Customer", "Tasker", "Manager"],
@@ -322,6 +316,18 @@ const userSchema = new Schema(
       bankVerified: { type: Boolean, default: false },
     },
 
+    balance: {
+      type: Number,
+    },
+
+    taskFund: {
+      type: Number,
+    },
+
+    totalFund: {
+      type: Number,
+      default: this.taskFund + this.balance,
+    },
     // refreshToken : String
   },
 

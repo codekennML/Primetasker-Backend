@@ -8,7 +8,7 @@ const createAccessToken = (currentUser) => {
         username: currentUser?.username,
         email: currentUser.email,
         roles: currentUser.roles,
-        avatar: currentUser.Avatar,
+        avatar: currentUser.Avatar ?? currentUser.avatar,
         verified: currentUser.verification,
       },
     },

@@ -1,46 +1,25 @@
 const { respond } = require("../helpers/response");
+const {
+  handleOfferCreation,
+  handleOfferDeletion,
+} = require("../helpers/transactionUpdate");
 const Offer = require("../model/Offers");
 const Task = require("../model/Task");
 
 const createOffer = async (req, res) => {
   const { offerDetails } = req.body;
-  console.log(offerDetails.offerMessage);
-
-  console.log(offerDetails);
 
   if (!offerDetails.taskId || !offerDetails.createdBy) {
     respond(res, 400, "Bad Request. Missing task Id", null, 400);
   }
+  const user = req.user;
 
-  let offerTask = await Task.findOne({ _id: offerDetails.taskId });
-
-  if (!offerTask) {
-    respond(res, 404, "No task found for this offer", null, 404);
+  if (!user) {
+    return respond(res, 401, "Error : Unauthorized", null, 401);
   }
+  const result = await handleOfferCreation(user, offerDetails);
 
-  const offer = await Offer.create(offerDetails);
-
-  if (!offer) {
-    respond(res, 409, "Failed to create offer", null, 409);
-  }
-
-  offerTask.offerCount = offerTask.offerCount + 1;
-  offerTask.offers.push(offer._id);
-
-  if (offerTask.offers.length > 15) {
-    offerTask.hasMoreOffers = true;
-  }
-
-  offerTask.offers
-    .sort((a, b) => b.getTimestamp() - a.getTimestamp())
-    .slice(0, 15);
-
-  const modifiedTask = await offerTask.save();
-  // console.log(modifiedTask);
-
-  if (!offer) {
-    respond(res, 409, "Task offer update failed", null, 409);
-  }
+  if (result.error) return respond(res, 409, `${result.error}`, null, 409);
 
   // emitter.emit("offerMade", {
   //   taskCreator: offerTask.userId,
@@ -53,7 +32,7 @@ const createOffer = async (req, res) => {
   //   taskId: offerTask._id,
   // });
 
-  respond(res, 201, "offer created success", offer, 201);
+  return respond(res, 201, "offer created success", result.data, 201);
 };
 
 const editOffer = async (req, res) => {
@@ -290,20 +269,21 @@ const getTaskOffers = async (req, res) => {
 };
 
 const updateOffer = async (req, res) => {
-  const { offerId, fields } = req.body;
+  const { offerId, taskId, assigneeId } = req.body;
 
   if (!offerId) {
-    respond(res, 400, null, "Bad Request");
+    respond(res, 400, "Error:Bad Request", null, 400);
+  }
+
+  if (assigneeId !== currentUser) {
+    respond(res, 400, "Error : Bad Request", null, 400);
   }
 
   var offer = await Offer.findById(offerId);
-  if (!offer) respond(req, res, 404, null, "Offer not Found");
 
-  Object.keys(fields).map((key) => {
-    if (key in offer) {
-      offer[key] = fields[key];
-    }
-  });
+  if (!offer) respond(res, 404, "Offer not Found", null, 404);
+
+  offer.offerAmount = message;
 
   const updatedOffer = await offer.save();
 
@@ -311,30 +291,35 @@ const updateOffer = async (req, res) => {
     respond(res, 400, "Failed to update offer", null);
   }
 
+  //Send notification to host to approve offer , then trigger lock In Budget in tasks
+
+  // Object.keys(fields).map((key) => {
+  //   if (key in offer) {
+  //     offer[key] = fields[key];
+  //   }
+  // });
+
   respond(res, 200, "offer update success", updatedOffer);
 };
 
 const deleteOffer = async (req, res) => {
-  const { offerId } = req.body;
+  const { taskId } = req.body;
 
-  if (!offerId) {
+  if (!taskId) {
     respond(res, 400, "Bad Request, missing offer id", null);
   }
 
-  const offerToDelete = await Offer.findById(offerId);
+  const user = req.user;
 
-  if (!offerToDelete) {
-    respond(res, 404, "Error : Offer Not Found", null);
+  if (!user) {
+    respond(res, 401, "Error : Unauthorized", null, 401);
   }
 
-  offerToDelete.userDeleted = true;
-  offerToDelete = offerToDelete.save();
+  const result = await handleOfferDeletion(user, taskId);
 
-  if (!offerToDelete) {
-    respond(res, 400, "Failed to delete offer. Please try again ", null);
-  }
+  if (result.error) respond(res, 409, `${result.error}`, null, 409);
 
-  respond(res, 200, "Your offer has been deleted", null);
+  respond(res, 200, "offer deleted success", result.data, 200);
 };
 
 module.exports = {

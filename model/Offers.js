@@ -24,6 +24,12 @@ const offerSchema = Schema(
 
     offerMessage: {
       type: String,
+      required: true,
+    },
+
+    isFlagged: {
+      type: Boolean,
+      default: false,
     },
 
     userDeleted: {

@@ -1,7 +1,9 @@
 const Task = require("../model/Task");
 const mongoose = require("mongoose");
+const { ObjectId } = mongoose.Types;
 const Detail = require("../model/taskExtras");
 const User = require("../model/User");
+const Offer = require("../model/Offers");
 const { respond } = require("../helpers/response");
 // const { getAblyClient } = require("../config/Ably");
 const keywordMatchQueue = require("../Queues/taskAlertsQueue,js");
@@ -20,6 +22,15 @@ process.env.GOOGLE_APPLICATION_CREDENTIALS = keyPath;
 // });
 
 const { tokenizeStemLemma } = require("../helpers/tokeniseStem");
+const {
+  handleTaskAssignment,
+  handleAdminFeeDeduction,
+} = require("../helpers/transactionUpdate");
+const { query } = require("express");
+const {
+  generateRandomId,
+  generateTaskTrackingCode,
+} = require("../helpers/createUniqId");
 
 const createTask = async (req, res) => {
   const { fields } = req.body;
@@ -31,22 +42,31 @@ const createTask = async (req, res) => {
   // }
 
   // console.log(fields);
-  const { details, Avatar, location, ...others } = fields;
+  const { details, Avatar, budget, location, ...others } = fields;
 
   let newFields;
 
   if (fields.taskType === "Remote") {
     newFields = {
+      budget: {
+        initialBudget: budget,
+        finalBudget: 0,
+      },
       description: details,
       ...others,
     };
   } else {
     newFields = {
+      budget: {
+        initialBudget: budget,
+        finalBudget: 0,
+      },
       description: details,
-      taskAddress: location?.place,
+      taskAddress: location?.place.name,
       location: {
         type: "Point",
         coordinates: [location?.lng, location?.lat],
+        placeId: location?.place?.placeId,
       },
       ...others,
     };
@@ -67,79 +87,79 @@ const createTask = async (req, res) => {
 
   emitter.emit("new-task", newFields);
 
-  const text = `${newFields.title} ${newFields.description}`;
-  let entitiesToCompare;
+  // const text = `${newFields.title} ${newFields.description}`;
+  // let entitiesToCompare;
 
-  try {
-    const document = {
-      content: text,
-      type: "PLAIN_TEXT",
-    };
+  // try {
+  //   const document = {
+  //     content: text,
+  //     type: "PLAIN_TEXT",
+  //   };
 
-    const [result] = await client.analyzeEntities({ document });
+  //   const [result] = await client.analyzeEntities({ document });
 
-    const entities = result?.entities;
+  //   const entities = result?.entities;
 
-    const allEntities =
-      entities?.length > 0
-        ? entities.reduce((acc, entity) => {
-            const result = tokenizeStemLemma(entity);
-            return acc.concat(result);
-          }, [])
-        : [];
+  //   const allEntities =
+  //     entities?.length > 0
+  //       ? entities.reduce((acc, entity) => {
+  //           const result = tokenizeStemLemma(entity);
+  //           return acc.concat(result);
+  //         }, [])
+  //       : [];
 
-    entitiesToCompare = Array.from(new Set(allEntities));
-  } catch (err) {
-    console.log(err);
-  }
+  //   entitiesToCompare = Array.from(new Set(allEntities));
+  // } catch (err) {
+  //   console.log(err);
+  // }
 
   // const regexString = entitiesToCompare.map((term) => `(${term})`).join("|");
 
   //Perform string similarity test using the description text and the alerts texts and if the score > 27%. return the alert
 
-  const AlertsWithMatchingStems = await Alert.find({
-    // stemmedTextArray: { $regex: regexString },
-    stemmedTextArray: { $in: entitiesToCompare },
-    categoryId: { $eq: createdTask.categoryId },
-  });
+  // const AlertsWithMatchingStems = await Alert.find({
+  //   // stemmedTextArray: { $regex: regexString },
+  //   stemmedTextArray: { $in: entitiesToCompare },
+  //   categoryId: { $eq: createdTask.categoryId },
+  // });
 
   // console.log(AlertsWithMatchingStems);
 
-  const highlySimilarAlerts = (entries) => {
-    const tokenizedText = tokenizeStemLemma(text).toString();
+  // const highlySimilarAlerts = (entries) => {
+  //   const tokenizedText = tokenizeStemLemma(text).toString();
 
-    entries.forEach((entry) => {
-      const tokenizedEntry = tokenizeStemLemma(entry.text).toString();
+  //   entries.forEach((entry) => {
+  //     const tokenizedEntry = tokenizeStemLemma(entry.text).toString();
 
-      const similarityScore = stringSimilarity.compareTwoStrings(
-        tokenizedText,
-        tokenizedEntry
-      );
-      // const similarityScore = nlp.similarity.cosine(text, entry.text);
-      console.log(similarityScore, entry._id);
+  //     const similarityScore = stringSimilarity.compareTwoStrings(
+  //       tokenizedText,
+  //       tokenizedEntry
+  //     );
+  //     // const similarityScore = nlp.similarity.cosine(text, entry.text);
+  //     console.log(similarityScore, entry._id);
 
-      if (similarityScore && similarityScore > 0.27 && entry) {
-        // usersToAlert.push(entry);
+  //     if (similarityScore && similarityScore > 0.27 && entry) {
+  //       // usersToAlert.push(entry);
 
-        emitter.emit("notify", {
-          type: "AlertMatch",
-          userId: entity.userId,
-          content: createdTask._id, //We will use the content to hold the taskID that is matched so we can provide a link to the task in the frontend
-        });
+  //       emitter.emit("notify", {
+  //         type: "AlertMatch",
+  //         userId: entity.userId,
+  //         content: createdTask._id, //We will use the content to hold the taskID that is matched so we can provide a link to the task in the frontend
+  //       });
 
-        sendAlertMatchMailTaskQueue.add({
-          userId: entity.userId,
-          taskId: createdTask._id,
-        });
+  //       sendAlertMatchMailTaskQueue.add({
+  //         userId: entity.userId,
+  //         taskId: createdTask._id,
+  //       });
 
-        //Add Push Notification
-        // sendPushNotification()
-      }
-    });
-  };
+  //       //Add Push Notification
+  //       // sendPushNotification()
+  //     }
+  //   });
+  // };
 
   //Execute the function to compare similarities & sendMail, Notificaton and push notification
-  highlySimilarAlerts(AlertsWithMatchingStems);
+  // highlySimilarAlerts(AlertsWithMatchingStems);
 
   // usersToAlert?.length > 0 ? sendAlertMatchTaskQueue.add({
   //   userId :
@@ -179,8 +199,6 @@ const getAllTasks = async (req, res) => {
   excludeParams.forEach((params) => delete reqQuery[params]); //exclude unwanted fields
 
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> - Searching Results - >>>>>>>>>>>>>>>>>>>>>//
-
-  console.log(JSON.parse(req.query.filterParams));
 
   let searchQuery;
 
@@ -399,69 +417,7 @@ const getAllTasks = async (req, res) => {
     },
     { $unwind: "$creator_details" }
   );
-  // limit the comments
-  // query.push(
-  //   {
-  //     $lookup: {
-  //       from: "comments",
-  //       localField: "comments",
-  //       foreignField: "_id",
-  //       as: "populated_comments",
-  //     },
-  //   },
 
-  //   {
-  //     $lookup: {
-  //       from: "users",
-  //       localField: "populated_comments.createdBy",
-  //       foreignField: "_id",
-  //       pipeline: [
-  //         {
-  //           $project: {
-  //             _id: 1,
-  //             firstname: 1,
-  //             lastname: 1,
-  //             Avatar: 1,
-  //           },
-  //         },
-  //       ],
-  //       as: "comment_creator",
-  //     },
-  //   },
-
-  //   {
-  //     $addFields: {
-  //       comments: {
-  //         $map: {
-  //           input: "$populated_comments",
-  //           as: "comment",
-  //           in: {
-  //             $mergeObjects: [
-  //               "$$comment",
-  //               {
-  //                 creator: {
-  //                   $arrayElemAt: [
-  //                     {
-  //                       $filter: {
-  //                         input: "$comment_creator",
-  //                         cond: { $eq: ["$$this._id", "$$comment.createdBy"] },
-  //                       },
-  //                     },
-  //                     0,
-  //                   ],
-  //                 },
-  //               },
-  //             ],
-  //           },
-  //         },
-  //       },
-  //     },
-  //   },
-
-  //   {
-  //     $unset: ["populated_comments", "comment_creator", "comments.createdBy"],
-  //   }
-  // );
   //Sort Stage
   query.push(
     {
@@ -481,7 +437,6 @@ const getAllTasks = async (req, res) => {
         taskDeadline: 1,
         offerCount: 1,
         createdAt: 1,
-        // total: 1,
       },
     }
   );
@@ -490,11 +445,10 @@ const getAllTasks = async (req, res) => {
   query.push({
     $skip: docsToSkip,
   });
+
   query.push({
     $limit: pageSize,
   });
-
-  console.log(matchQuery);
 
   const result = await Task.aggregate([
     { $match: matchQuery }, //Match stage inside query object
@@ -518,7 +472,6 @@ const getAllTasks = async (req, res) => {
   ]);
 
   let tasks;
-  console.log(result.length);
 
   if (result.length === 0) {
     tasks = {
@@ -545,18 +498,146 @@ const getAllTasks = async (req, res) => {
 };
 
 const getUserTask = async (req, res) => {
-  const userId = req.body;
+  console.log(req.query);
+
+  const userId = req.user;
+  // const userId = req.user;
+  console.log(userId);
 
   if (!userId) {
-    return res.status(403).json({ message: "Unauthorized" });
+    return res.status(400).json({ message: "Bad Request" });
   }
 
-  const tasks = await Task.findById({ creator: userId });
+  let query = [];
 
-  if (!tasks) {
-    respond(res, 404, "No tasks found", null);
+  let searchQuery;
+
+  const searchTerm = req.query.search;
+
+  if (searchTerm !== undefined && searchTerm !== "") {
+    const queryRegex = new RegExp(searchTerm, "i");
+    searchQuery = { title: queryRegex };
   }
-  respond(res, 200, "tasks fetched success", tasks);
+
+  let statusFilter;
+  const status = req.query.status;
+
+  if (
+    status !== undefined &&
+    (status === "Open" ||
+      status === "Assigned" ||
+      status === "Completed" ||
+      status === "Appeal")
+  ) {
+    statusFilter = { status: { $eq: status } };
+  } else {
+    statusFilter = { status: { $ne: "Inactive" } };
+  }
+
+  const page = parseInt(req.query.page) || 1; //Page being requested
+  const pageSize = parseInt(req.query.limit) || 10; //Number of items per page
+  const docsToSkip = (page - 1) * pageSize; //Number of items to skip on page
+
+  query.push({
+    $project: {
+      _id: 1,
+      creator: 1,
+      assigned: 1,
+      status: 1,
+      budget: 1,
+      taskTime: 1,
+      taskType: 1,
+      taskDeadline: 1,
+      taskEarliestDone: 1,
+      title: 1,
+      offerCount: 1,
+    },
+  });
+  query.push(
+    {
+      //Lookup query to find the creator of each task based on the creator ref to the User table
+      $lookup: {
+        from: "users",
+        localField: "creator",
+        foreignField: "_id",
+        let: { searchId: { $toObjectId: "$creator" } }, //creator id was stored as string, need to convert to object id
+
+        pipeline: [
+          { $match: { $expr: [{ _id: "$$searchId" }] } },
+
+          {
+            $project: {
+              _id: 1,
+              Avatar: 1,
+            },
+          },
+        ],
+
+        as: "creator_details",
+      },
+    },
+    { $unwind: "$creator_details" }
+  );
+
+  //Pagination Stage
+  query.push({
+    $skip: docsToSkip,
+  });
+
+  query.push({
+    $limit: pageSize,
+  });
+
+  const matchQuery = Object.assign(
+    { creator: { $eq: ObjectId(userId) } },
+    searchQuery ?? {},
+    statusFilter ?? {}
+  );
+
+  const result = await Task.aggregate([
+    { $match: matchQuery }, //Match stage inside query object
+    {
+      $facet: {
+        count: [{ $count: "total" }],
+        matchedDocuments: query,
+      },
+    },
+
+    {
+      $unwind: "$count",
+    },
+    {
+      $project: {
+        _id: 0,
+        count: "$count.total",
+        data: "$matchedDocuments",
+      },
+    },
+  ]);
+
+  let tasks;
+
+  if (result.length === 0) {
+    tasks = {
+      tasks: [],
+      meta: {
+        count: 0,
+        page: 0,
+        pages: 0,
+      },
+    };
+  } else {
+    tasks = {
+      tasks: result[0].data,
+      meta: {
+        count: result[0]?.count,
+        page: page,
+        pages: Math.ceil(result[0].count / pageSize),
+      },
+    };
+  }
+
+  respond(res, 200, "tasks fetched success", tasks, 200);
 };
 
 const getSpecificTask = async (req, res) => {
@@ -575,7 +656,7 @@ const getSpecificTask = async (req, res) => {
       populate: {
         path: "createdBy",
         model: User,
-        select: "Avatar lastname firstname",
+        select: "avatar lastname firstname",
       },
     },
     {
@@ -588,7 +669,7 @@ const getSpecificTask = async (req, res) => {
       populate: {
         path: "createdBy",
         model: User,
-        select: "Avatar lastname firstname",
+        select: "avatar lastname firstname",
       },
       options: {
         sort: { createdAt: -1 }, // Sort offers by createdAt in descending order
@@ -601,35 +682,131 @@ const getSpecificTask = async (req, res) => {
   };
 
   if (!task) {
-    respond(res, 404, "Task does not exist", null, 400);
+    respond(res, 404, "Task does not exist", null, 404);
   }
 
   respond(res, 200, "tasks fetch success", singleTask, 200);
 };
 
-const updateTask = async (req, res) => {
-  const { taskId, fields } = req.body;
+const assignTask = async (req, res) => {
+  const { taskId, assigneeId, offerId } = req.body;
 
-  if (!taskId) {
-    respond(res, 400, null, "Bad Request");
+  const hostId = req.user;
+
+  if (!taskId || !assigneeId) {
+    return respond(res, 400, "Bad Request", null, 400);
   }
 
   var task = await Task.findById(taskId);
-  if (!task) respond(req, res, 404, null, "Task not Found");
 
-  Object.keys(fields).map((key) => {
-    if (key in task) {
-      task[key] = fields[key];
-    }
+  if (!task) respond(res, 404, "Error: Task not found", null, 404);
+
+  const assignee = await User.findById(assigneeId);
+
+  if (!assignee) respond(res, 404, "Error: User not found", null, 404);
+
+  // const result = handleAdminFeeDeduction(
+  //   hostId,
+  //   taskId,
+  //   2,
+  //   task.budget.initialBudget
+  // );
+
+  // if (result.error) respond(res, 409, `${result.error}`, null, 409);
+
+  console.log(offerId);
+
+  // const offer = task.offers.find(
+  //    (offer) => JSON.stringify(offer) === offerId);
+  const offer = task.offers.find((offer) => offer.toString() === offerId);
+
+  if (!offer) return respond(res, 404, "Error : Offer Not Found", null, 404);
+
+  const assignedOffer = await Offer.findOne({ _id: offerId })
+    .populate({
+      path: "createdBy",
+      select: "firstname lastname avatar",
+      model: User,
+    })
+    .lean();
+
+  const trackingCode = await generateTaskTrackingCode();
+
+  if (!trackingCode)
+    return respond(
+      res,
+      409,
+      "Failed to assign Offer. Please try again",
+      null,
+      409
+    );
+
+  task.assigned = {
+    assignedAt: new Date(),
+    trackingCode: trackingCode,
+    assigneeAvatar: assignedOffer.createdBy.avatar,
+    assigneeId: assignedOffer.createdBy._id,
+    assigneeFirstname: assignedOffer.createdBy.firstname,
+    assigneeLastname: assignedOffer.createdBy.lastname,
+  };
+
+  task.budget.assignedBudget = assignedOffer.offerAmount;
+  task.status = "Assigned";
+
+  const updatedTask = await task.save();
+
+  if (!updatedTask) {
+    respond(res, 409, "Error: Failed to assign task", updatedTask, 200);
+  }
+
+  //Send Notification type preference  to tasker and host about assignment
+
+  respond(res, 200, "Success : task assigned success", updatedTask, 200);
+};
+
+const lockBudget = async (req, res) => {
+  const { finalBudget, taskId, assigneeId } = req.body;
+
+  const hostId = req.user;
+
+  if (!finalBudget || !taskId || !assigneeId || !hostId) {
+    respond(res, 400, "Error : Bad Request", null, 400);
+  }
+
+  const result = handleTaskAssignment(hostId, assigneeId, taskId, amount);
+
+  if (result.error) respond(res, 409, `${result.error}`, null, 409);
+
+  respond(res, 200, `Success : ${result.data} `, null, 200);
+};
+
+const updateTaskBudget = async (req, res) => {
+  const { taskId, finalBudget } = req.body;
+
+  const currentUser = req.user;
+
+  if (!taskId || !budget) {
+    respond(res, 400, "Bad Request", null, 400);
+  }
+
+  var task = await Task.findById(taskId);
+
+  if (!task) respond(res, 404, "Task not Found", null, 404);
+
+  if (currentUser !== task.assigned.assigneeId)
+    respond(res, 403, "Error : Forbidden ", null, 404);
+
+  task.budget = Object.assign(task.budget, {
+    finalBudget: finalBudget,
   });
 
   const updatedTask = await task.save();
 
   if (!updatedTask) {
-    respond(res, 400, "Failed to update task", null);
+    respond(res, 409, "Failed to send final offer", null, 409);
   }
 
-  respond(res, 200, "task update success", updatedTask);
+  respond(res, 200, "Final Offer update success", updatedTask, 200);
 };
 
 const deleteTask = async (req, res) => {
@@ -656,11 +833,39 @@ const deleteTask = async (req, res) => {
   return res.status(200).json({ message: "Your task has been deleted " });
 };
 
+const cancelTask = async (req, res) => {
+  const { taskId } = req.query;
+
+  if (!taskId) {
+    return res.status(400).json({ message: "Bad Request, missing task id" });
+  }
+
+  const taskToCancel = await Task.findById(taskId);
+
+  if (!taskToCancel) {
+    return res.status(404).json({ message: "Error : Task Not Found" });
+  }
+
+  taskToCancel.userDeleted = true;
+  taskToCancel.status = "Cancelled";
+  taskToCancel = taskToCancel.save();
+
+  if (!taskToCancel) {
+    return res
+      .status(400)
+      .json({ message: "Failed to cancel task. Please try again " });
+  }
+
+  return res.status(200).json({ message: "Your task has been cancelled " });
+};
+
 module.exports = {
   getAllTasks,
   getUserTask,
   getSpecificTask,
-  updateTask,
+  updateTaskBudget,
   deleteTask,
   createTask,
+  assignTask,
+  cancelTask,
 };

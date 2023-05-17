@@ -56,7 +56,7 @@ class Paystack {
 
   verifyPayment() {
     const path = `/transaction/verify/:${this.reference}`;
-    console.log(path);
+
     const options = {
       hostname: "api.paystack.co",
       port: 443,

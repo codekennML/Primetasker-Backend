@@ -38,14 +38,92 @@ const taskSchema = Schema(
     },
 
     budget: {
-      type: Number,
-      required: true,
+      initialBudget: {
+        type: Number,
+        required: true,
+      },
+      assignedBudget: {
+        type: Number,
+      },
+      finalBudget: {
+        type: Number,
+      },
     },
 
     status: {
       type: String,
-      enum: ["Assigned", "Inactive", "Processing", "Open", "Completed"],
+      enum: [
+        "Assigned",
+        "Inactive",
+        "Appeal",
+        "Open",
+        "Completed",
+        "Cancelled",
+      ],
       default: "Open",
+    },
+
+    hostMarkedAppeal: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+    hostMarkedComplete: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+
+    hostReleasedPayment: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+
+    taskerMarkedAppeal: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+
+    taskerMarkedComplete: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+
+    taskerRequestPayment: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+
+    step: {
+      type: String,
+      enum: ["offerApproved", "offerAwaitingApproval", "taskerArrived"],
+    },
+
+    assigned: {
+      assigneeId: {
+        type: mongoose.SchemaTypes.ObjectId,
+        ref: "User",
+      },
+      assigneeFirstname: {
+        type: String,
+      },
+      assigneeLastname: {
+        type: String,
+      },
+      assigneeAvatar: {
+        type: String,
+      },
+
+      assignedAt: {
+        type: Date,
+      },
+      trackingCode: {
+        type: String,
+      },
     },
 
     taskAddress: {
@@ -106,6 +184,7 @@ const taskSchema = Schema(
         ref: "Offer",
       },
     ],
+
     hasMoreOffers: {
       type: Boolean,
       default: false,
