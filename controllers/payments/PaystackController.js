@@ -2,44 +2,57 @@ const { Paystack } = require("./config/paystack");
 const User = require("../../model/User");
 const { respond } = require("../../helpers/response");
 const { Payments } = require("../../model/Payment");
+const { generateRandomId } = require("../../helpers/createUniqId");
+const { handlePaymentUserDeposit } = require("../../helpers/transactionUpdate");
 
 const startPayment = async (req, res) => {
-  const { amount, method } = req.body;
-
-  if (!amount || !method) {
-    respond(res, 400, "Error : Bad Request ", null, 400);
+  const { amount } = req.body;
+  console.log(amount);
+  if (!amount) {
+    return respond(res, 400, "Error : Bad Request ", null, 400);
   }
 
   const currentUser = req.user;
 
+  console.log(currentUser);
+
   if (!currentUser) {
-    respond(res, 401, "Unauthorized ", null, 401);
+    return respond(res, 401, "Unauthorized ", null, 401);
   }
 
   const user = await User.findById(currentUser);
 
   if (!user) {
-    respond(res, 404, "No User Found", null, 404);
+    return respond(res, 404, "No User Found", null, 404);
   }
 
-  const email = user.email;
-  const amountToPay = req.body?.amount;
+  // const email = user.email;
+  // const amountToPay = req.body?.amount;
 
-  const userPay = new Paystack(user._id, "paystack", email, amountToPay);
+  // const userPay = new Paystack(user._id, "paystack", email, amountToPay);
 
-  const paystackApiResponse = await userPay.initalizePayment();
+  // const paystackApiResponse = await userPay.initalizePayment();
 
-  if (paystackApiResponse && paystackApiResponse?.status === false) {
-    respond(
-      res,
-      404,
-      "Error : Failed to validate payment Information",
-      null,
-      404
-    );
-  }
+  // if (paystackApiResponse && paystackApiResponse?.status === false) {
+  //   respond(
+  //     res,
+  //     404,
+  //     "Error : Failed to validate payment Information",
+  //     null,
+  //     404
+  //   );
+  // }
 
-  res.redirect(paystackApiResponse.data.authorization_url);
+  // res.redirect(paystackApiResponse.data.authorization_url);
+
+  const result = await handlePaymentUserDeposit(currentUser, amount);
+  console.log("XL", result);
+  if (result.error)
+    return respond(res, 409, "Something went wrong ", null, 409);
+
+  return respond(res, 201, "Deposit success", result.data, 201);
+
+  //TODO: Remember to ensure the payment creation is retried if it fails and if it fails repeatedly, initiate a refund using paystack api
 };
 
 const verifyPayment = async (req, res) => {
@@ -101,9 +114,42 @@ const UserPaymentDetails = async (req, res) => {
   respond(res, 200, "success : transactions fetched success", transaction, 200);
 };
 
+const handleWithdrawal = async (req, res) => {
+  const { OTP, userId, amount } = req.body;
+
+  const currentUser = req.user;
+
+  if (userId !== currentUser || !OTP || !userId || !amount)
+    return respond(res, 400, "Bad Request", null, 400);
+
+  const user = await User.findById(userId);
+  if (!user) return respond(res, 404, "User Nof Found", null, 404);
+
+  if (user.balance < amount)
+    return respond(res, 409, "Insufficient Funds", null, 409);
+
+  //Add Paystack transfer function to user
+
+  user.balance -= amount;
+
+  const updatedUserWithBalance = await user.save();
+
+  if (!updatedUserWithBalance)
+    return respond(res, 409, "Operation Failed. Please try again");
+
+  return respond(
+    res,
+    200,
+    "Operation Success",
+    updatedUserWithBalance.balance,
+    200
+  );
+};
+
 module.exports = {
   startPayment,
   verifyPayment,
   getPaymentDetails,
   UserPaymentDetails,
+  handleWithdrawal,
 };

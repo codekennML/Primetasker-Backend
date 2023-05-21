@@ -1,9 +1,10 @@
 const router = require("express").Router();
 const payController = require("../controllers/payments/PaystackController");
+const verifyJWT = require("../middleware/verifyJWT");
 
 router
   .route("/paystack")
-  .post(payController.startPayment)
+  .post(verifyJWT, payController.startPayment)
   .get(payController.verifyPayment);
 
 router.route("/:id").get(payController.getPaymentDetails);

@@ -32,6 +32,21 @@ const taskSchema = Schema(
       required: true,
     },
 
+    commencementCode: {
+      type: String,
+    },
+
+    taskerLastLocation: {
+      type: {
+        type: String,
+        enum: ["Point"],
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined,
+      },
+    },
+
     taskTime: {
       type: String,
       //set required
@@ -48,6 +63,16 @@ const taskSchema = Schema(
       finalBudget: {
         type: Number,
       },
+
+      increaseFirst: {
+        type: Number,
+      },
+      increaseSecond: {
+        type: Number,
+      },
+      increaseLast: {
+        type: Number,
+      },
     },
 
     status: {
@@ -57,10 +82,17 @@ const taskSchema = Schema(
         "Inactive",
         "Appeal",
         "Open",
+        "Processing",
         "Completed",
         "Cancelled",
       ],
       default: "Open",
+    },
+
+    hostMarkedBudgetApproved: {
+      type: Boolean,
+      required: true,
+      default: false,
     },
 
     hostMarkedAppeal: {
@@ -74,10 +106,18 @@ const taskSchema = Schema(
       default: false,
     },
 
+    hostReleaseOTP: {
+      type: Number,
+    },
+
     hostReleasedPayment: {
       type: Boolean,
       required: true,
       default: false,
+    },
+    hostReviewForTasker: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: "Review",
     },
 
     taskerMarkedAppeal: {
@@ -97,10 +137,14 @@ const taskSchema = Schema(
       required: true,
       default: false,
     },
+    taskerReviewForHost: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: "Review",
+    },
 
     step: {
       type: String,
-      enum: ["offerApproved", "offerAwaitingApproval", "taskerArrived"],
+      enum: ["offerApproved", "offerAwaitingApproval"],
     },
 
     assigned: {
@@ -141,10 +185,6 @@ const taskSchema = Schema(
       coordinates: {
         type: [Number],
         default: undefined,
-      },
-
-      placeId: {
-        type: String,
       },
     },
 

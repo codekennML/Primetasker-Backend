@@ -131,7 +131,7 @@ const getAllUsers = async (req, res) => {
 };
 
 const getSingleUser = async (req, res) => {
-  const { id } = req.query;
+  const { id } = req.params;
 
   if (!id) {
     return res

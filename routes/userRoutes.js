@@ -16,7 +16,7 @@ router.route("/ip").get(usersController.getUserSystemInfo);
 // router.route("/:id").get(usersController.getSingleUser);
 
 router
-  .route("/profile")
+  .route("/:id")
   .get(usersController.getSingleUser)
   .post(usersController.updateUserProfile);
 

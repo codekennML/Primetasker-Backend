@@ -6,7 +6,7 @@ router
   .route("/")
   .get(offerController.getAllOffers)
   .post(verifyJWT, offerController.createOffer)
-  // .patch(verifyJWT, offerController.updateOffer)
+  .patch(verifyJWT, offerController.updateOffer)
   .delete(verifyJWT, offerController.deleteOffer);
 
 router.route("/task").get(offerController.getTaskOffers);

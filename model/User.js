@@ -35,7 +35,6 @@ const userSchema = new Schema(
     homeaddress: {
       suite: {
         type: String,
-        required: true,
       },
 
       location: {
@@ -162,6 +161,20 @@ const userSchema = new Schema(
       default: true,
     },
 
+    suspended: {
+      type: Boolean,
+      default: false,
+    },
+
+    taskerNumberOfConsecutiveCancellation: {
+      type: Number,
+    },
+
+    suspendedUntil: {
+      type: Date,
+      default: null,
+    },
+
     isFlagged: {
       type: Boolean,
       default: false,
@@ -195,13 +208,19 @@ const userSchema = new Schema(
     taskMinAmount: {
       type: Number,
     },
+    averageRating: {
+      type: Number,
+    },
+    totalReviews: {
+      type: Number,
+    },
 
     taskType: {
       type: String,
       default: function () {
-        return this.verified ? "Hybrid" : "Online";
+        return this.verified ? "Hybrid" : "Remote";
       },
-      enum: ["Online", "Physical", "Hybrid"],
+      enum: ["Remote", "Physical", "Hybrid"],
     },
 
     taskState: {
@@ -240,19 +259,9 @@ const userSchema = new Schema(
       },
     },
 
-    // cardDetails: [
-    //   {
-    //     cardName: {
-    //       type: String,
-    //     },
-    //     cardNumber: {
-    //       type: Number,
-    //     },
-    //     cardExpiry: {
-    //       type: String,
-    //     },
-    //   },
-    // ],
+    consecutiveCancellation: {
+      type: Number,
+    },
 
     alerts: [
       {
@@ -318,16 +327,14 @@ const userSchema = new Schema(
 
     balance: {
       type: Number,
+      default: 0,
     },
 
-    taskFund: {
+    taskFunds: {
       type: Number,
+      default: 0,
     },
 
-    totalFund: {
-      type: Number,
-      default: this.taskFund + this.balance,
-    },
     // refreshToken : String
   },
 

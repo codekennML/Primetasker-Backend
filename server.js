@@ -80,7 +80,9 @@ app.use("/bookings", require("./routes/bookingRoutes"));
 app.use("/stats", require("./routes/statRoutes"));
 app.use("/flags", require("./routes/flagRoutes"));
 app.use("/notifications", require("./routes/notifications"));
-// app.use("/pay", require("./routes/PaymentRoutes"));
+app.use("/reviews", require("./routes/reviewRoutes"));
+app.use("/pay", require("./routes/PaymentRoutes"));
+app.use("/otp", require("./routes/otpRoutes"));
 
 app.all("*", (req, res) => {
   res.status(404);

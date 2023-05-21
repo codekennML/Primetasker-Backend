@@ -25,11 +25,17 @@ const { tokenizeStemLemma } = require("../helpers/tokeniseStem");
 const {
   handleTaskAssignment,
   handleAdminFeeDeduction,
+  retryTransaction,
+  handleHostCancellation,
+  handleTaskerCancellation,
+  handleLockBudget,
+  handleReleasePayment,
 } = require("../helpers/transactionUpdate");
 const { query } = require("express");
 const {
   generateRandomId,
   generateTaskTrackingCode,
+  randomNumberOTP,
 } = require("../helpers/createUniqId");
 
 const createTask = async (req, res) => {
@@ -62,11 +68,10 @@ const createTask = async (req, res) => {
         finalBudget: 0,
       },
       description: details,
-      taskAddress: location?.place.name,
+      taskAddress: location?.name,
       location: {
         type: "Point",
         coordinates: [location?.lng, location?.lat],
-        placeId: location?.place?.placeId,
       },
       ...others,
     };
@@ -656,7 +661,7 @@ const getSpecificTask = async (req, res) => {
       populate: {
         path: "createdBy",
         model: User,
-        select: "avatar lastname firstname",
+        select: "Avatar lastname firstname",
       },
     },
     {
@@ -669,7 +674,7 @@ const getSpecificTask = async (req, res) => {
       populate: {
         path: "createdBy",
         model: User,
-        select: "avatar lastname firstname",
+        select: "Avatar lastname firstname",
       },
       options: {
         sort: { createdAt: -1 }, // Sort offers by createdAt in descending order
@@ -689,95 +694,45 @@ const getSpecificTask = async (req, res) => {
 };
 
 const assignTask = async (req, res) => {
-  const { taskId, assigneeId, offerId } = req.body;
+  const { taskId, assigneeId, amount, offerId } = req.body;
 
   const hostId = req.user;
+  console.log(req.user);
 
-  if (!taskId || !assigneeId) {
+  if (!taskId || !assigneeId || !amount || !offerId || !hostId) {
     return respond(res, 400, "Bad Request", null, 400);
   }
 
   var task = await Task.findById(taskId);
 
-  if (!task) respond(res, 404, "Error: Task not found", null, 404);
+  if (!task) return respond(res, 404, "Error: Task not found", null, 404);
 
   const assignee = await User.findById(assigneeId);
 
-  if (!assignee) respond(res, 404, "Error: User not found", null, 404);
+  if (!assignee) return respond(res, 404, "Error: User not found", null, 404);
 
-  // const result = handleAdminFeeDeduction(
-  //   hostId,
-  //   taskId,
-  //   2,
-  //   task.budget.initialBudget
-  // );
+  const result = await handleTaskAssignment(hostId, taskId, amount, offerId);
 
-  // if (result.error) respond(res, 409, `${result.error}`, null, 409);
+  if (result.error) return respond(res, 409, `${result.error}`, null, 409);
 
-  console.log(offerId);
-
-  // const offer = task.offers.find(
-  //    (offer) => JSON.stringify(offer) === offerId);
-  const offer = task.offers.find((offer) => offer.toString() === offerId);
-
-  if (!offer) return respond(res, 404, "Error : Offer Not Found", null, 404);
-
-  const assignedOffer = await Offer.findOne({ _id: offerId })
-    .populate({
-      path: "createdBy",
-      select: "firstname lastname avatar",
-      model: User,
-    })
-    .lean();
-
-  const trackingCode = await generateTaskTrackingCode();
-
-  if (!trackingCode)
-    return respond(
-      res,
-      409,
-      "Failed to assign Offer. Please try again",
-      null,
-      409
-    );
-
-  task.assigned = {
-    assignedAt: new Date(),
-    trackingCode: trackingCode,
-    assigneeAvatar: assignedOffer.createdBy.avatar,
-    assigneeId: assignedOffer.createdBy._id,
-    assigneeFirstname: assignedOffer.createdBy.firstname,
-    assigneeLastname: assignedOffer.createdBy.lastname,
-  };
-
-  task.budget.assignedBudget = assignedOffer.offerAmount;
-  task.status = "Assigned";
-
-  const updatedTask = await task.save();
-
-  if (!updatedTask) {
-    respond(res, 409, "Error: Failed to assign task", updatedTask, 200);
-  }
-
-  //Send Notification type preference  to tasker and host about assignment
-
-  respond(res, 200, "Success : task assigned success", updatedTask, 200);
+  return respond(res, 200, "Success : task assigned success", result.data, 200);
 };
 
 const lockBudget = async (req, res) => {
-  const { finalBudget, taskId, assigneeId } = req.body;
-
+  const { taskId, newBudget } = req.body;
+  console.log(req.body);
   const hostId = req.user;
 
-  if (!finalBudget || !taskId || !assigneeId || !hostId) {
-    respond(res, 400, "Error : Bad Request", null, 400);
+  if (!taskId || !hostId || !newBudget) {
+    return respond(res, 400, "Error : Bad Request", null, 400);
   }
 
-  const result = handleTaskAssignment(hostId, assigneeId, taskId, amount);
+  const result = await handleLockBudget(hostId, taskId, newBudget);
+  // const result = handleTaskAssignment(hostId, assigneeId, taskId, amount);
 
-  if (result.error) respond(res, 409, `${result.error}`, null, 409);
+  if (result.error) return respond(res, 409, `${result.error}`, null, 409);
 
-  respond(res, 200, `Success : ${result.data} `, null, 200);
+  return respond(res, 200, `Budget Approved.`, null, 200);
 };
 
 const updateTaskBudget = async (req, res) => {
@@ -785,28 +740,234 @@ const updateTaskBudget = async (req, res) => {
 
   const currentUser = req.user;
 
-  if (!taskId || !budget) {
-    respond(res, 400, "Bad Request", null, 400);
+  if (!taskId || !finalBudget || !currentUser) {
+    return respond(res, 400, "Bad Request", null, 400);
   }
 
   var task = await Task.findById(taskId);
 
-  if (!task) respond(res, 404, "Task not Found", null, 404);
+  if (!task) return respond(res, 404, "Task not Found", null, 404);
+  console.log(task.assigned.assigneeId.toString(), currentUser);
 
-  if (currentUser !== task.assigned.assigneeId)
-    respond(res, 403, "Error : Forbidden ", null, 404);
+  if (currentUser !== task.assigned.assigneeId?.toString())
+    return respond(res, 403, "Forbidden ", null, 403);
 
   task.budget = Object.assign(task.budget, {
     finalBudget: finalBudget,
   });
-
+  task.step = "offerAwaitingApproval";
   const updatedTask = await task.save();
 
   if (!updatedTask) {
-    respond(res, 409, "Failed to send final offer", null, 409);
+    return respond(res, 409, "Failed to send final offer", null, 409);
   }
 
-  respond(res, 200, "Final Offer update success", updatedTask, 200);
+  return respond(res, 200, "Final Offer Update Success", updatedTask, 200);
+};
+
+const generateTaskCommencementCode = async (req, res) => {
+  const { coordinates, taskId } = req.query;
+  const currentUser = req.user;
+
+  if (!coordinates.lng || !coordinates.lat)
+    return respond(
+      res,
+      400,
+      "Please enable your location to continue",
+      null,
+      400
+    );
+
+  if (!taskId)
+    return respond(res, 400, "Bad Request, Please try again ", null, 400);
+
+  const task = await Task.findById(taskId);
+
+  if (!task) return respond(res, 404, "Task Not Found, try again  ", null, 404);
+
+  const code = generateRandomId();
+
+  if (!code)
+    return respond(
+      res,
+      409,
+      "Code Generation Failed, Please try again ",
+      null,
+      409
+    );
+
+  if (currentUser !== task.assigned.assigneeId.toString())
+    return respond(res, 403, "Forbidden ", null, 403);
+
+  const startCode = code.substring(0, 8);
+
+  task.commencementCode = startCode;
+
+  task.taskerLastLocation = {
+    type: "Point",
+    coordinates: [Number(coordinates.lng), Number(coordinates.lat)],
+  };
+
+  const updatedTask = await task.save();
+
+  if (!updatedTask)
+    return respond(
+      res,
+      409,
+      "Code Generation Failed, Please try again ",
+      null,
+      409
+    );
+
+  return respond(res, 200, "Operation success ", startCode, 200);
+};
+
+const confirmTaskerArrival = async (req, res) => {
+  const { code, taskId } = req.query;
+
+  const currentUser = req.user;
+
+  if (!code) return respond(res, 400, "Invalid Code. ", null, 400);
+
+  const task = await Task.findById(taskId);
+
+  if (!task) return respond(res, 404, "Task Not Found, try again  ", null, 404);
+
+  if (currentUser !== task.creator.toString())
+    return respond(res, 403, "Forbidden", null, 403);
+
+  if (code !== task.commencementCode)
+    return respond(res, 403, "Invalid Code. Please try again   ", null, 403);
+
+  task.status = "Processing";
+
+  const processingTask = await task.save();
+
+  if (!processingTask)
+    return respond(
+      res,
+      409,
+      "Operation Failed, Please try again   ",
+      null,
+      409
+    );
+
+  return respond(res, 200, "Arrival validated", null, 200);
+};
+
+const sendReleaseOTP = async (req, res) => {
+  const { id: taskId } = req.params;
+
+  console.log(req.params);
+
+  const currentUser = req.user;
+
+  const task = await Task.findById(taskId);
+
+  const OTP = randomNumberOTP();
+
+  if (currentUser === task.creator.toString()) {
+    task.hostReleaseOTP = OTP;
+
+    //TODO:Send OTP SMS
+    //TODO :SendOTP Email
+  } else {
+    return respond(res, 403, "Forbidden", null, 403);
+  }
+  console.log(OTP);
+  const updatedTask = await task.save();
+
+  if (!updatedTask) return respond(res, 409, "Operation Failed", null, 409);
+
+  return respond(res, 200, "Operation Success", OTP, 200);
+};
+
+const markCompleteAndRequestPayment = async (req, res) => {
+  const { taskId } = req.query;
+
+  const currentUser = req.user;
+
+  if (!taskId) return respond(res, 400, "Bad Request", null, 400);
+
+  const task = await Task.findById(taskId);
+
+  if (!task) return respond(res, 404, "Task Not Found", null, 404);
+
+  if (currentUser !== task.assigned.assigneeId.toString())
+    return respond(res, 403, "Forbidden", null, 403);
+
+  task.taskerMarkedComplete = true;
+  task.taskerRequestPayment = true;
+
+  const finishedTask = await task.save();
+
+  if (!finishedTask) return respond(res, 409, "Operation Failed", null, 409);
+
+  return respond(res, 200, "Operation Success", finishedTask, 200);
+};
+
+const markCompleteAndReleasePayment = async (req, res) => {
+  const { taskId, OTP, taskerId } = req.body;
+  console.log(req.body);
+
+  const currentUser = req.user;
+  console.log(currentUser);
+  if (!taskId || !OTP || !taskerId)
+    return respond(res, 400, "Bad Request", null, 400);
+
+  let response;
+
+  try {
+    const result = await retryTransaction(
+      handleReleasePayment,
+      3,
+      currentUser,
+      taskId,
+      OTP,
+      taskerId
+    );
+    response = result;
+  } catch (error) {
+    response = error;
+  }
+  console.log(response);
+
+  if (response.error || response.message)
+    return respond(res, 409, "Failed to release payment", null, 409);
+
+  return respond(res, 200, "Payment success", response.data, 200);
+};
+
+const appealTask = async (req, res) => {
+  const { id: taskId } = req.params;
+  console.log(req.params);
+
+  const currentUser = req.user;
+
+  if (!taskId)
+    return respond(res, 400, "Bad Request, Please Try again", null, 400);
+
+  const task = await Task.findById(taskId);
+
+  if (!task) return respond(res, 404, "Task Not Found", null, 404);
+
+  console.log(task.creator, currentUser);
+
+  if (currentUser === task.creator.toString()) {
+    task.hostMarkedAppeal = true;
+  } else if (currentUser === task.assigned.assigneeId.toString()) {
+    task.taskerMarkedAppeal = true;
+  } else {
+    return respond(res, 403, "Forbidden", null, 403);
+  }
+
+  task.status = "Appeal";
+
+  const appealedTask = await task.save();
+
+  if (!appealedTask) return respond(res, 409, "Operation Failed", null, 409);
+
+  return respond(res, 200, "Operation Success", appealedTask, 200);
 };
 
 const deleteTask = async (req, res) => {
@@ -834,29 +995,55 @@ const deleteTask = async (req, res) => {
 };
 
 const cancelTask = async (req, res) => {
-  const { taskId } = req.query;
+  const { who, initiatorId, taskId, status, hostId } = req.body;
 
-  if (!taskId) {
-    return res.status(400).json({ message: "Bad Request, missing task id" });
-  }
+  console.log(req.body);
+
+  if (!who || !initiatorId || !taskId || !status || !hostId)
+    return respond(res, 400, "Bad Request", null, 400);
 
   const taskToCancel = await Task.findById(taskId);
 
-  if (!taskToCancel) {
-    return res.status(404).json({ message: "Error : Task Not Found" });
+  if (!taskToCancel) return respond(res, 404, "Task Not Found", null, 404);
+
+  //-----------------------------------------------------//
+
+  async function cancelTask(task) {
+    task.status = "Cancelled";
+
+    const cancelledTask = await task.save();
+
+    cancelledTask
+      ? (result = {
+          status: 200,
+          message: "Task Cancelled",
+          data: cancelledTask,
+        })
+      : (result = {
+          status: 409,
+          message: "Failed to cancel task",
+          data: null,
+        });
+  }
+  //-----------------------------------------------------//
+
+  let result;
+
+  if (status === "Open") {
+    result = await cancelTask(taskToCancel);
   }
 
-  taskToCancel.userDeleted = true;
-  taskToCancel.status = "Cancelled";
-  taskToCancel = taskToCancel.save();
-
-  if (!taskToCancel) {
-    return res
-      .status(400)
-      .json({ message: "Failed to cancel task. Please try again " });
+  if (status === "Assigned" && who === "Host") {
+    result = await handleHostCancellation(taskId, hostId);
   }
+  // if (who === "Assignee") {
+  //   result = await handleTaskerCancellation(taskId, initiatorId, hostId);
+  // }
 
-  return res.status(200).json({ message: "Your task has been cancelled " });
+  if (result?.error || result?.status === 409)
+    return respond(res, 409, "Operation Failed", null, 409);
+
+  return respond(res, 200, "Operation Success", null, 200);
 };
 
 module.exports = {
@@ -868,4 +1055,11 @@ module.exports = {
   createTask,
   assignTask,
   cancelTask,
+  lockBudget,
+  confirmTaskerArrival,
+  generateTaskCommencementCode,
+  sendReleaseOTP,
+  markCompleteAndRequestPayment,
+  markCompleteAndReleasePayment,
+  appealTask,
 };
