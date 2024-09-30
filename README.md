@@ -1,1 +1,1 @@
-This is the inital backend code for prmetasker
+Backend code for the Primetasker website
